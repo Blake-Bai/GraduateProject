@@ -1,0 +1,665 @@
+﻿\chapter{增强的形变最小化映射计算} \label{chap:AMIPS}
+本章首先在~\ref{sec:MIPS}节中，回顾标准的低形变最小化的MIPS参数化算法，然后在~\ref{sec:IBCD}节中提出非精确块坐标轮换下降法(inexact BCD)用于高效率的最小化类MIPS的能量函数，可以避免过早地陷入局部最小。最后在~\ref{sec:AMIPS} 节中，我们提出了一种增强的MIPS能量函数—AMIPS。AMIPS继承了MIPS的保持无翻转的性质，同时可以用来抑制映射的最大形变。
+
+\section{形变最小化的参数化能量} \label{sec:MIPS}
+形变最小化的参数化(MIPS)方法计算了一个低形变参数化，它是一个分段线性函数$f: \mathbb{R}^3 \rightarrow \mathbb{R}^2$，将一个只拥有一个边界，并且没有洞的三角形网格$\mT$ 映射到二维参数化平面上。映射$f$是由在三角形$\mt^0 \in \mT$上的分段线性仿射变换$g_{\mt^0}$ 构成的。在每个三角形$\mt^0$ 上，引入一个局部坐标系，每个$g_{\mt^0}$存在一个线性的表达$g_{\mt^0}(\mx) = J_{\mt^0} \cdot \mx + b_{\mt^0} $，其中$J_{\mt^0}$是一个$2\times2$ 仿射矩阵，同时也是$f$ 的Jacobian 矩阵。图\ref{fig:para_example}给出了一个参数化的例子。
+\begin{figure}[h]
+\centering
+\begin{overpic}[width=0.9\linewidth]{IBCD/para_example}
+\put(23,-3){(a)}
+\put(74,-3){(b)}
+\put(13,4){$\mt^0$}
+\put(14.5,10.5){$0$}
+\put(13.5,18){$e_1$}
+\put(21,10.5){$e_2$}
+\put(65,6){$\mt$}
+\put(76.5,7){$\my$}
+\put(81,3.5){$\mx$}
+\end{overpic}
+\vspace{3mm}
+\caption{网格参数化例子。(a)原始网格$\mT$。(b)在平面参数域上的网格。在(a)的每个三角上建立一个局部标架，参数化转化为一个计算二维映射的问题。}
+\label{fig:para_example}
+\vspace{-3mm}
+\end{figure}
+
+设 $J_{\mt^0}$的奇异值为$\sigma_1$和$\sigma_2$，在每个三角形${\mt^0}$上的MIPS能量函数$E_{mips,{{\mt^0}}}^{2D}$定义为
+\begin{equation}
+E_{mips,\mt^0}^{2D} = \frac{\sigma_1}{\sigma_2} + \frac{\sigma_2}{\sigma_1}  = \|J_{\mt^0}\|_F \|J^{-1}_{\mt^0}\|_F = \frac{\trace(J_{\mt^0}^T J_{\mt^0})}{\det J_{\mt^0}}.
+\end{equation}
+其中$\|\cdot\|_F$代表的是Frobenius范数。三角形$\mt^0$在刚性变化和均匀缩放下，$E_{mips,\mt^0}^{2D}$保持不变。当$g_{\mt^0}$是一个共形变换的时候，MIPS能量函数值达到最小值2。所有三角形的$E_{mips,\mt^0}^{2D}$的累和形成了整体的MIPS能量$E_{mips}^{2D}$。
+
+MIPS能量的一个主要的性质是它能抑制退化的三角形，因为当$\det J_{\mt}$ 趋向于零时，MIPS能量趋向于无穷大。$\det J_{\mt^0}=\frac{\vol \mt}{\vol \mt^0}$，因此优化过程中能量不会让$\vol \mt$趋向于0的，于是避免了退化的三角形。这里$\vol$代表网格单元的面积或体积。
+
+标准的MIPS算法是为了平面参数化设计的，算法成功的前提是存在一个无翻转的参数化结果作为输入，接下来的优化都显式地保证所有的$\vol \mt > 0$。具体的算法可以分为如下的步骤:
+\begin{enumerate}
+\item 算法输入一个有效的双射，比如，使用重心坐标映射将$\mT$映射到一个凸二维区域上。比如，图\ref{fig:para_example}(b)中的圆盘参数化结果可以作为初始的映射，它是双射的，所有的$\vol \mt > 0$，但是部分三角形的形变很大。
+\item 随机的选择一个顶点$\mp \in \mT$，并且固定其余所有顶点。通过最小化$E_{mips,{\mt^0}}^{2D}$来更新$\mp$的位置。因为$E_{mips,{\mt^0}}^{2D}$关于$\mp$是一个局部凸函数~\cite[Theorem 1.12]{Hormann2001}，所以在局部使用牛顿法可以获得唯一的最小值，并且保证不出现三角形的翻转。
+\item 当没有顶点可以被移动或者迭代次数达到设定的最大值时，算法停止。否则，跳转到第二步。
+\end{enumerate}
+
+\begin{figure}[t]
+\centering
+\vspace{5mm}
+\begin{overpic}[width=0.9\linewidth]{IBCD/curve}
+\put(28,25){\includegraphics[width=0.33\linewidth]{IBCD/camel_ori_mips_10000}}
+\put(68,25){\includegraphics[width=0.33\linewidth]{IBCD/camel_result_IBCD}}
+\put(38,62){\small (a) exact BCD}
+\put(78,62){\small (b) inexact BCD}
+\put(10,10){\small \textcolor[rgb]{1.00,0.50,0.00}{inexact BCD}}
+\put(80,16){\small exact BCD}
+\put(93,5){\small\#iter}
+\put(0,61){\small$E^{2D}_{mips}$}
+\end{overpic}
+\caption{
+在camel(2181个三角形)模型上，使用精确块坐标轮换下降法(exact BCD)和非精确块坐标轮换下降法(inexact BCD)来优化MIPS能量，进行平面参数化。 能量曲面展示了inexact BCD能够获得更小的值，并且更快的收敛速度($y$-轴使用$\log$ 进行缩放)。使用exact BCD的原始MIPS算法容易过早的陷入局部最小。 (a,b): 参数化结果的共形形变$\sigma_{\max}/\sigma_{\min}$使用颜色编码，越白越好。 结果的最大与平均共形形变分别是(15.72, 1.31)(exact BCD)和(5.81, 1.21)(inexact BCD)。}
+\label{fig:curve}
+\vspace{-4mm}
+\end{figure}
+
+图~\ref{fig:curve}展示了一个使用MIPS算法来进行平面参数化的例子，共进行了6000次迭代，在每次迭代中，所有的顶点都被更新一次。
+
+\section{非精确块坐标轮换下降法} \label{sec:IBCD}
+块坐标轮换下降(BCD)方法(也被称为非线性高斯-赛德尔方法)~\cite{Bonettini2011,Xu2013}是一个流行的优化算法，可以用来求解大规模的非线性与非凸的优化问题。我们考虑的优化问题：
+\begin{equation}\label{eq:bcdprob}
+\min_{\mx} F(x_1,x_2,\ldots,x_n)
+\end{equation}
+其中$\mx = (x_1,x_2,\ldots,x_n) \in \Omega = \Omega_1 \times \Omega_2 \times \ldots \times \Omega_m \subseteq \mathbb{R}^n$。 $\Omega_i$是$\Omega$的一个凸子集。 变量集$\mx$能够被分为$m$个块$\{B_i,i=1,\ldots,m\}$。假设$F$是一个多凸的，多凸的意思是$F$关于$\Omega_i$的每个$B_i$中的变量是严格凸的。一个用来求解~\ref{eq:bcdprob}的标准BCD方法如下。
+\begin{enumerate}
+\item 从一个初始的解$\{x_0^0, \ldots, x_n^0\}$开始。
+\item 对于每个$l, l \in \{1,\ldots,m\}$，求解凸的子问题：
+    $$\min_{B_l \in \Omega_i}  F(B_0^{k}, \ldots, B_{l-1}^{k}, B_{l}, B_{l+1}^{k-1},\ldots,B_{m}^{k-1}),$$
+    更新$B_l^k$。其中$k$代表的是迭代次数，$B_l$是子问题中的自由变量。凸的子问题一般能达到最优解。
+\item 如果所有变量没有大的变化，停止算法。否则，跳转到第二步。
+\end{enumerate}
+理论上，序列$\{\mx^{k}\}$的极限点是$F$的驻点，通常情况下，它也是$F$的局部最小点。值得关注的是，$F$的多凸性质保证了极限点的存在、保证了每一步子问题的求解都能收敛。
+
+在BCD的第二步，精确地求解凸的子问题是非常耗时的，比如使用牛顿法迭代求解，Hessian矩阵的构造，线性系统的求解等都是很费时，会降低整体算法的效率。寻找近似的最优解是常见和有效的加速方法，比如，只进行一步梯度下降算法。因此BCD方法能够被分为两类：精确BCD(exact BCD) 和非精确 BCD(inexact BCD)。这里的精确与非精确指的是子问题是不是被优化到最优解。 最近Xu 和Yin 指出，inexact BCD 通常能获得更低的目标函数，因为从一步梯度下降法得到的局部线性近似能够避免局部最小值附近的小区域~\cite{Xu2013}，同时在梯度法中会希望较大的步长来跨过这个区域，从而避免过早的陷入局部最小。
+
+标准的MIPS算法实际上使用了exact BCD，每个顶点的坐标形成了变量的块。在每个顶点的一领域中，MIPS能量函数相对于这个顶点的位置是局部凸的~\cite{Hormann2001}。 子问题通过牛顿法迭代法求解。MIPS的不高效是由于局部牛顿迭代需要在每步都收敛。通过将牛顿法代替为一步梯度下降法，MIPS能够高效的获得最低的形变，如图~\ref{fig:curve}所示。
+
+\paragraph{变量块}
+在原来的MIPS算法中，每个顶点的坐标形成了一个变量块。注意到，定义在每个网格单元上的能量函数只和相邻的顶点相关，导致不相邻顶点实际上可以被同时更新。我们将网格的顶点分为几个块，在每个块中，任何两个顶点都是不相连的。通过图着色算法可以获得这样的块。在我们的实现中，我们使用了Boost库的图着色算法。在优化的过程中，每个块中的顶点被同时更新，这样可以提高整个算法的效率，具体看实验\ref{sec:AMIPS_results}。
+
+\paragraph{初始化}
+我们的算法和MIPS类似，需要输入无翻转的初始化网格：对于网格参数化，我们通过凸组合映射方法将网格映射到二维凸区域上，可以获得初始双射，类似图\ref{fig:para_example}(b)；对于网格变形或者质量提高，我们的输入网格是无翻转的，它们可以直接作为初始的网格。
+
+\paragraph{顶点更新}
+对于一个块中的每个顶点$\mp$，我们使用一步梯度下降法进行更新： $\mp_{new} := \mp - \lambda \nabla_\mp F$。当$\mp - \lambda \triangledown_\mp F$在$\mp$的一邻域的边界上时，确定初始的$\lambda^0$。使用简单的回溯线搜索方法确定$\lambda$： 如果$F$ 增加或者$\mp$ 的一领域的中存在翻转的单元时，$\lambda$减少为原始的$\lambda^{k+1} = \alpha \cdot \lambda^{k}$。一般的算法会直接取$\alpha$为一个固定值，比如$\alpha=0.85$。在我们的实现中，因为初始的$\lambda^0$ 一般都过大，需要快速的缩小搜索范围。我们使用了一种简单的策略来加速回溯线搜索，使用比较小的$\alpha=0.1$来快速缩小搜索范围，直至$F$下降且没有出现翻转。因为希望获得比较大的步长，这时我们会将$\lambda^{k+1} = 10 \cdot \lambda^{k}$。接下来提高$\alpha$的值进行比较精细的搜索。这个策略在接近收敛的时候，效率的提高是很明显的，并且能保证算法依然有很好的效果。
+
+\paragraph{停止准则}
+当能量函数的相对误差小于$10^{-6}$或者迭代次数超过最大值时，我们的算法终止。
+
+\paragraph{备注1.}
+在我们的inexact BCD的实现中，通过一步梯度下降算法更新每个顶点。同时我们实现了另一种非精确的BCD更新策略：一步牛顿下降法：$\mp_{new} := \mp- \lambda (\nabla^2_\mp F)^{-1} \nabla_\mp F $。我们发现一步牛顿下降法通常会得到和精确牛顿方法类似的目标函数值。比如，它的能量函数曲线和图~\ref{fig:curve}中的exact BCD基本上一致。这样的结果可能是因为一步牛顿法的近似和子问题的精确算法是非常靠近的，也就是下降的还是太快了，整体上容易过早地陷入局部最小。
+
+\section{增强的MIPS能量} \label{sec:AMIPS}
+在~\ref{sec:MIPS}节中提到，MIPS能量函数$E_{mips}^{2D}$能抑制二维共形形变，并且当三角形接近于退化时，能量函数趋近于无穷大。但是在三维中，共形形变同样可以被定义为最大奇异值与最小奇异值的比值，但是最大最小奇异值的确定很困难，因为涉及到一元三次多项式方程的解析解。于是为了避免显式地确定哪个奇异值是最大或者最小，我们定义了一个对称式的共形能量：
+\begin{align*}\label{MIPS:mips_3D}
+%\begin{split}
+E^{3D}_{mips}(J(f)) &=\frac{1}{8}\left(\frac{\sigma_{1}}{\sigma_{2}} + \frac{\sigma_{2}}{\sigma_{1}}\right)\left(\frac{\sigma_{3}}{\sigma_{1}} + \frac{\sigma_{1}}{\sigma_{3}}\right)\left(\frac{\sigma_{2}}{\sigma_{3}} + \frac{\sigma_{3}}{\sigma_{2}}\right)\\
+&= \frac{1}{8}\left(\| J(f) \|^2_{F} \cdot \| J(f)^{-1} \|^2_{F} - 1\right) \\
+& = \frac{1}{8}(\kappa_F(J(f))^2 -1).
+%\end{split}
+\end{align*}
+$\sigma_{1}$， $\sigma_{2}$和$\sigma_{3}$是映射$f$的Jacobian矩阵$J(f)$的三个奇异值。并且$\kappa_F(J(f))$是$J(f)$的Frobenius条件数。当$\sigma_{1}=\sigma_{2}=\sigma_{3}$时，$E^{3D}_{mips}$到达它的最小值1，同时$f$ 是共形变换。
+
+共形能量不需要$J(f)$的行列式等于1，对于刚性变换而言，$\det(J(f) = 1$是一个必要条件。我们添加一个能量函数项$E_{\det}(J(f)) :=\frac{1}{2}(\det(J(f))+\det(J(f))^{-1})$进共形能量中，从而定义刚性能量：
+\begin{equation*}
+E^{d}_{iso}(J(f)) = \alpha\, E^{d}_{mips}(J(f)) + (1 - \alpha)\, E_{\det}(J(f)),
+\end{equation*}
+其中$d$代表二维或者三维。 $\alpha$在我们的实验中被设为0.5。为了将$E^{2D}_{mips}(J(f))$的最小值变为1，我们将原始标准的MIPS能量函数进行$\frac{1}{2}$的缩放。对于基于网格的应用，$E_{\det}(J(f))$还能被写为$\frac{1}{2}\left(|\mt_i||\mt^0_i|^{-1} + |\mt^0_i||\mt_i|^{-1}\right)$，其中$|\mt_i|$是变换后的网格单元的体积，$|\mt^0_i|$是原始网格单元的体积。当映射是保面积/保体积时，$E_{\det}$达到它的最小值1。映射是刚性的当且仅当它同时是共形的和保面积的。$E^{d}_{iso}(J(f))$是刚性形变很好的一个测量标准。
+
+\paragraph{控制最大形变}
+通常意义上讲，即使网格映射的平均形变比较小，如果存在一个网格单元具有很大形变的话，这个映射也是不好的。因此很多计算机图形学的应用需要控制最大形变。形变有界的算法~\cite{Lipman2012,Aigerman2013,Kovalsky2014,Poranne2014} 设定形变的上界，用来显式的控制最大形变。严格最小方法~\cite{Levi2014}尝试去最小化最大形变，通过优化ARAP能量的上界，来控制形变的分布。
+
+这些方法一般很费时，因为在优化过程中大量使用了半正定规划，或者二次规划。我们提出了将指数函数与$E_{mips}$或者$E_{iso}$结合起来，用来抑制最大的共形形变，或者刚性形变，被称为增强MIPS能量(AMIPS)。共形或者刚性AMIPS能量函数通过如下方式定义：
+\begin{align}
+%\begin{split}
+E^{\star}_{mips} &:= \sum \exp(s \cdot E_{mips}),\; E^{\star}_{det} := \sum \exp(s \cdot E_{\det}) \\
+E^{\star}_{iso} &:= \sum \exp(s \cdot E_{iso}) = \sum \exp(s \cdot E_{mips}+s \cdot E_{\det})
+%\end{split}
+\end{align}
+其中对于基于网格的应用，$\sum$将所有网格单元上的能量函数累加；对于无网格变形，$\sum$将所有采样点上的能量函数累加。$s$是一个用来控制惩罚层次的参数。小的$s$ 对于最大形变的惩罚比较小，太大的$s$ 可能会引入数值不稳定。在合理的范围内取值$s$，这时随着$s$的变大，映射的平均形变值会升高，最大形变会降低。在我们的实现中，对于二维映射选择$s=5$而三维映射选择$s=2$。对于基于网格的无翻转的映射计算，$E_{\det}$和$E_{mips}^{2D}$在顶点的一邻域中，相对于这个顶点的位置变量是局部凸的~\cite{Hormann2001,Jiao2011}。 我们猜测$E_{mips}^{3D}$ 也是多凸的。同样的结论对于$E^{\star}_{iso}$和$E^{\star}_{mips}$也成立。所以inexact BCD能够高效的进行能量的优化。通过优化AMIPS能量函数，最大的共形与体积形变能够被同时抑制，形变的分布能够被控制。%图~\ref{fig:teaser}展示了和其他的最新方法的比较。
+
+\paragraph{备注2.} 使用$L_\infty$范数来抑制最大的形变是另外一个方向。但是和~\cite{Levi2014}发现的一样，$L_\infty$缺乏对最大值以下的形变分布的有效控制。
+
+\section{实验与比较} \label{sec:AMIPS_results}
+我们将AMIPS与最先进的算法进行了比较。对于网格参数化与变形，我们和形变有界的映射算法(BDM)~\cite{Lipman2012,Aigerman2013}， 局部单射算法(LIM) ~\cite{Schuller2013}和严格最小化算法(STRICT)~\cite{Levi2014}进行了比较。对于无网格变形，我们选择了最新的形变有界的映射算法(PGPM)~\cite{Poranne2014}作为竞争者。对于网格质量提高，我们比较的对象是~\cite{Brewer2003}和~\cite{Fu2014}。在试验中，我们都使用了其他文章作者自己的实现。对于inexact BCD 的实现，我们使用C++中的OpenMP对每个块中的顶点进行同时更新，相比于串行的实现，速度提高3$\sim$5倍。在我们的实验中，块的顺序对最终的结果的影响很小。我们的实验是在一个有3.4\,GHz 英特尔i7\,CPU和16\,GB内存的台式机上测试的。
+
+\paragraph{形变度量}
+对于顶点$\mp$而言，我们定义刚性形变~\cite{Sorkine2002}为：
+$$\delta^{iso}_\mp:= \max \{\sigma_{\max,p}, \sigma^{-1}_{\min,p}\}.$$
+当所有的奇异值都为1时，$\delta^{iso}$达到最小值1。注意到，$\delta^{iso}_\mp$比常见的ARAP 能量$\sum_i (\sigma_{i,p}-1)^2$ 能更好表达刚性形变，特别是当$\sigma_{\min,p}$趋近于0时。
+
+对于顶点$\mp$而言，共形形变被定义为:
+$$\delta^{con}_\mp:= \sigma_{\max,p}\cdot \sigma^{-1}_{\min,p},$$
+它用来衡量映射离真正共形变换有多远。同样的，对于基于网格的映射，$\delta^{con}_\mt$表示共形形变。当所有奇异值都相同时，$\delta^{con}$到达最小值1。
+
+映射的Jacobian矩阵的行列式体现了体积形变，我们定义体积形变：
+$$\delta^{vol}_\mp:=\max\{\det(J(f)), \det(J(f))^{-1}\}.$$
+基于网格的映射中:
+$$\delta^{vol}_\mt:= \max\{\frac{\vol{\mt}}{\vol{\mt^0}}, \frac{\vol{\mt^0}}{\vol{\mt}}\},$$
+其中$\mt^0$是$\mt$在映射前的原象。当$\delta^{vol} = 1$时，映射是保面积/保体积的。
+
+在我们的实验中，我们报告了所有网格单元或者采样点上的形变度量，包括它们的最大值(最坏)，平均值，标准差，表示为$\delta^{iso}_{\max}, \delta^{iso}_{\avg}, \delta^{iso}_{\dev}$, $\delta^{con}_{\max}, \delta^{con}_{\avg}, \delta^{con}_{\dev}$， 和 $\delta^{vol}_{\max}, \delta^{vol}_{\avg}, \delta^{vol}_{\dev}$。 同时，我们通过颜色编码的方式，在网格上可视化了$\delta^{iso}$(编码方式：图~\ref{fig:teaser}-左边) 和$\delta^{con}$(编码方式：图~\ref{fig:conformal}-左上角)。 最好值使用加粗的字体。
+
+\subsection{平面网格参数化}
+\paragraph{刚性参数化}
+首先我们使用凸组合映射将一个单连通的网格映射到二维单位圆区域上，然后我们使用inexact BCD最小化$E^{\star}_{iso}$。在迭代刚开始的时候，考虑到$E^{\star}_{\det}$会比$E^{\star}_{mips}$大很多或者小很多，在开始的1000次迭代中，每100次，我们通过原始网格与参数化网格的边长比例的平均值将参数化网格进行缩放。我们的方法通常在2000次迭代内收敛。
+\begin{figure}[t]
+    \centerline{AMIPS \hspace{0.16\linewidth} LIM \hspace{0.16\linewidth} BDM(5)\hspace{0.16\linewidth} BDM(9)}
+    \centerline{
+    \includegraphics[width=1\linewidth]{Parameterization/Isometric/iso_para2_cropped}
+    }
+  \caption{使用AMIPS，LIM和BDM算法对Bunny头部和Bimba曲面进行刚性参数化。颜色表示$\delta^{iso}$。在参数化网格中，如果这个三角形的形变比AMIPS的最大形变还要大，那么这个三角形使用蓝色标记。为了公平起见，我们选择了不同的形变界值来测试BDM算法，BDM后面括号中的数值就是形变界的值。Bunny 头部来自于斯坦福三维扫描库，Bimba模型来自于Aim@Shape模型库。}
+  \label{fig:isopara}\vspace{-3mm}
+\end{figure}
+
+\begin{table}[!h]
+\caption{和BDM与LIM在刚性参数化上进行比较。加粗的数字代表是最好的结果。}
+\centering \scalebox{0.85}{
+\begin{tabular}{lrrrl}
+\toprule
+模型   & $\delta^{iso}_{\max}/\delta^{iso}_{\avg}/\delta^{iso}_{\dev}$ & $\delta^{con}_{\max}/\delta^{con}_{\avg}/\delta^{con}_{\dev}$ & $\delta^{vol}_{\max}/\delta^{vol}_{\avg}/\delta^{vol}_{\dev}$ & time (s) \\
+\midrule
+Bunny head (AMIPS) 	 & \textbf{3.89}/2.57/\textbf{0.56}  & 5.92/\textbf{3.23}/0.97   & \textbf{5.30}/2.25/1.03    & \textbf{2.21}  \\
+Bunny head (BDM(5)) 	 & 18.18/3.64/2.08 & \textbf{5.00}/3.74/\textbf{0.87}   & 169.82/4.62/6.51  & 47.87 \\
+Bunny head (BDM(9)) 	 & 8.97/2.84/1.14  & 9.02/4.62/2.01   & 48.21/1.96/1.66   & 43.15 \\
+Bunny head (LIM)     & 6.29/\textbf{2.39}/0.99  & 39.07/6.09/5.32  & 11.62/\textbf{1.11}/\textbf{0.35}   & 41.19 \\
+\midrule
+Bimba (AMIPS) 	 & \textbf{4.62}/\textbf{2.20}/\textbf{0.47} & 6.18/\textbf{2.44}/\textbf{1.03}  & 4.47/2.16/0.57  & \textbf{4.87}  \\
+Bimba (BDM(5)) 	 & 7.83/2.59/1.10 & \textbf{5.00}/3.32/1.12  & 12.50/2.16/1.43  & 106.48 \\
+Bimba (BDM(9)) 	 & 6.99/2.42/0.97 & 9.00/4.06/2.22  & 6.28/\textbf{1.52}/0.54  & 89.49 \\
+Bimba (LIM) 	 & 6.79/2.29/0.92 & 27.71/4.05/3.83 & \textbf{2.84}/1.55/\textbf{0.29}  & 16.31 \\
+\bottomrule
+\end{tabular}}
+\label{table:iso_stat}%\vspace{-4mm}
+\end{table}
+
+图~\ref{fig:isopara} 将我们的结果与形变有界的映射算法(BDM)~\cite{Lipman2012,Aigerman2013}, 局部单射算法(LIM) ~\cite{Schuller2013}和严格最小化算法(STRICT)~\cite{Levi2014}进行了比较。在BDM和LIM中，ARAP能量作为目标函数被使用。BDM的实现是由作者提供的。LIM使用同样的二维单位圆网格作为初始化输入。因为BDM没有最好上界的先验，在我们的实验中，我们尝试了共形形变的界为5和9。表~\ref{table:iso_stat}展示了形变度量的数据和时间。AMIPS 使用了最少的时间产生了参数化质量比其他方法更好，或者类似的结果。从纹理映射的结果来看，我们的方法能获得更好的刚性。尽管LIM能获得比AMIPS更低的体积形变$\delta^{vol}$，但是它的共形形变比AMIPS高很多(见Bunny头部的后面，Bimba模型的脖子)。BDM能够对共形形变加界，但是最大的面积形变是所有方法中最大的(见两个模型的底部)。更小的$\delta_{dev}^{iso}$说明了AMIPS能产生更加均匀的刚性形变。
+
+\paragraph{共形参数化}
+\begin{figure}[t]
+%\centerline{\hspace{0.30\linewidth} MIPS \hspace{0.1\linewidth} ABF++ \hspace{0.1\linewidth} BDM \hspace{0.1\linewidth} LIM \hspace{0.08\linewidth} AMIPS \hspace{0.08\linewidth}}
+\vspace{2mm}
+\centerline{
+\begin{overpic}[width=1\linewidth]{Parameterization/Conformal/comformal10_cropped}
+\put(24,101){\small MIPS} \put(40,101){\small ABF++} \put(57,101){\small BDM} \put(73,101){\small LIM} \put(88,101){\small AMIPS}
+\put(8,0){\small Dino} \put(8,16){\small Bunny} \put(8,33){\small Camel} \put(8,49.5){\small Male} \put(8,66.5){\small Fandisk} \put(9.2,83.5){Isis}
+{\scriptsize
+\put(21,84){(4.99,1.21,7.87s)}        \put(37,84){(2140.44,4.20,\textbf{0.31s})}    \put(54,84){(6.00,1.12,8.80s)} \put(71,84){(7.53,1.12,8.52s)}        \put(88,84){(\textbf{4.51},\textbf{1.09},2.19s)}
+\put(21,67){(19.47, 1.23, 11.96s)}    \put(37,67){(1983.90, 2.65, \textbf{0.38s})}    \put(54,67){(2.68, 1.08, 18.27s)}        \put(71,67){(2.39, 1.07, 2.07s)}      \put(88,67){(\textbf{2.08}, \textbf{1.04}, 2.05s)}
+\put(21,50){(14.55, 1.31, 7.32s)}     \put(37,50){(3996.92, 4.32, \textbf{0.30s})}    \put(54,50){(41.98, 1.64, 12.38s)}         \put(71,50){(69.00, 1.47, 5.22s)}     \put(88,50){(\textbf{12.75}, \textbf{1.28}, 1.21s)}
+\put(21,32.5){(15.72, 1.31, 7.09s)}   \put(37,32.5){(1544.19, 3.27, \textbf{0.27s})}  \put(54,32.5){(26.98, 1.52, 13.00s)}          \put(71,32.5){(26.21, 1.33, 4.03s)}   \put(88,32.5){(\textbf{3.96}, \textbf{1.20}, 1.68s)}
+\put(21,16){(2.45, 1.05, 99.62s)}     \put(37,16){(33.53, \textbf{1.02}, \textbf{5.08s})} \put(54,16){(1.42, \textbf{1.02}, 313.26s)} \put(71,16){(1.47, \textbf{1.02}, 744.64s)} \put(88,16){(\textbf{1.41}, \textbf{1.02}, 22.10s)}
+\put(21,-0.5){(11.21, 1.05, 62.40s)}  \put(37,-0.5){(153.89, 1.04, \textbf{6.71s})}   \put(54,-0.5){(8.00, \textbf{1.03}, 371.90s)} \put(71,-0.5){(29.26, \textbf{1.03}, 230.39s)} \put(88,-0.5){(\textbf{7.20}, \textbf{1.03}, 15.29s)}
+}
+\end{overpic}
+}
+\caption{六个模型的共形参数化比较，分别使用了标准的MIPS，ABF++\cite{Sheffer2005}，BDM，LIM和AMIPS。蓝色的边显示的三角形，拥有比AMIPS的最大共形形变更大的形变。黄色的边(Male和Fandisk模型)代表了翻转的三角形(ABF++的失败例子)。 每个图下面的三个数代表了最大，平均形变，和运行时间。模型的顶点与面的数量是： ISIS (1731,2626)， Fandisk (2271,4223)， Male (1720,2529)， Camel (1722,2181)， Bunny (35190,69451)， Dino (24605,47960)。 三维模型是来自于\url{http://alice.loria.fr/index.php/software/7-data/37-unwrapped-meshes.html}。}
+\label{fig:conformal} \vspace{-5mm}
+\end{figure}
+
+\begin{figure}
+\centerline
+{
+\subfloat[AMIPS(400次迭代)]{
+\begin{overpic}[width = 0.25\linewidth]{Parameterization/Conformal/camel_ours_400iter}
+\end{overpic}
+}\hfill
+\subfloat[LIM(梯度法)]{
+\begin{overpic}[width = 0.25\linewidth]{Parameterization/Conformal/camel_gradient_lim_400}
+\end{overpic}
+}\hfill
+\subfloat[LIM(牛顿法)]{
+\begin{overpic}[width = 0.25\linewidth]{Parameterization/Conformal/camel_newton_lim_400}
+\end{overpic}
+}
+}
+\caption{在LIM框架中，使用梯度下降和牛顿法的实验。 (a) 是我们的AMIPS算法运行400迭代后的结果。 (b)和(c)是用(a)作为初始产生的共形参数化结果。 他们的最大，平均共形形变分别是$(10.14, 2.50)$， $(3.96,1.81)$和$(3.96,1.19)$。可以看到梯度法虽然降低了最大值，但是平均值依然很高，说明全局梯度法表现很差。 }
+\label{fig:newton}
+\vspace{-5mm}
+\end{figure}
+
+和刚性参数化类似，初始化的凸映射可能存在非常高形变的三角形。直接优化$E_{mips}^{\star}$需要更多的迭代次数。所以在开始的1000次迭代中，使用我们的刚性参数化方法来展开初始的圆形参数化网格，然后接下来只优化$E_{mips}^{\star}$。
+
+图~\ref{fig:conformal}将我们的算法和标准的MIPS算法，基于角度的展平算法(ABF++)~\cite{Sheffer2005}，BDM和LIM进行比较。对于标准的MIPS算法，我们使用和AMIPS同样的块定义，同样的停止条件。对于Isis和Fandisk模型，BDM 算法的共形形变的界和~\cite{Lipman2012}是一样的。在其余模型上的共形形变界是我们通过测试得到的最小的可行整数值，并且在BDM算法中LSCM~\cite{Levy2002}能量被优化。BDM的实现由作者提供。LIM同样优化了LSCM能量。
+
+从结果上看，标准的MIPS算法容易陷入局部最小，并且产生很高的形变。对于所有的结果，ABF++使用了最少的时间，但是它引入较高的最大形变，甚至产生了翻转的三角形。对于BDM算法，如果它收敛那么结果可以保证形变有界。但是一般情况下，形变界对于用户而言事先是不知道，是很难选的，这是这类算法最大的问题。比如，Male模型的界是42，Camel模型的界是27，但是AMIPS可以产生更低的最大形变值。另外，因为使用了大量的二次规划，BDM是最慢的算法。LIM能够生成比较小的平均形变，但是它的最大形变很高。比如，Dino 模型的最大形变是$29.26$，但是平均形变是$1.03$。LIM 的效率是和网格单元的数目息息相关的，因为LIM使用了全局的牛顿迭代算法，同时需要很多的迭代次数。比如Bunny模型拥有$35190$ 个顶点，LIM使用了744秒收敛，是最慢的算法。在所有的方法中，我们的AMIPS 算法能够获得最小的最大，平均形变，并且计算速度只比ABF++ 慢。
+
+对于共形映射，我们同样使用LIM框架来优化AMIPS能量。梯度下降法和牛顿法被测试，同时LIM中的障碍函数被激活。我们发现梯度下降法和牛顿法都需要比较好的初始，否则它们很容易陷入局部最小。比如，Camel模型上的共形映射，如果直接从圆盘参数化网格出发，这些算法会失败。图~\ref{fig:conformal}中所有例子中，这种现象都出现了。AMIPS的中间结果(400个inexact BCD迭代)被用于这些方法的输入，从图~\ref{fig:newton}上的结果来看，这是一个值得信赖的初始化。
+
+\subsection{网格变形}
+我们将AMIPS算法应用到二维三角形和三维四面体网格的基于控制点的变形中。为了能更高效地进行优化，我们使用了类似于~\cite{Schuller2013} 中substepping 策略。对于每个控制点，首先确定它的临时位置，然后使用很少的迭代次数(在我们的实验中，3$\sim$7 次)运行inexact BCD来优化$E^{\star}_{iso}$。在保证不触发网格单元翻转的前提下，控制点的临时位置是从它原始的位置到期望的位置的射线上的最远点。重复以上的过程，直至所有的控制点都移动到目标位置。最后固定控制点的位置，优化$E^{\star}_{iso}$ 直至收敛。对于中度大小的网格，我们的算法能够获得交互式的反馈速率：14 FPS 图~\ref{fig:teaser} (5000个三角形)， 63 FPS 图~\ref{fig:d2D}(a) (1267个三角形)， 4 FPS 图~\ref{fig:deform_3D}(b) (13052个四面体)， 8 FPS 图~\ref{fig:deform_3D}(c) (7537个四面体)。
+
+\paragraph{二维网格模型变形}
+\begin{figure}
+%\vspace{-5mm}
+\centerline{
+\includegraphics[width=0.035\linewidth]{color_bar_isometric}
+\subfloat[AMIPS]{
+\begin{overpic}[width=0.24\linewidth]{2D_Mesh_Deformation/square/square50_ours_new}
+\put(50,90){\scriptsize{$\delta^{iso}_{\max}=3.25$}}
+\put(50,81){\scriptsize{$\delta^{iso}_{\avg}=1.98$}}
+\put(50,72){\scriptsize{$\delta^{iso}_{\dev}=0.45$}}
+\put(50,63){\scriptsize{时间 (0.35 秒)}}
+\end{overpic}
+}\hfill
+\subfloat[BDM~\cite{Lipman2012}]{
+\begin{overpic}[width=0.24\linewidth]{2D_Mesh_Deformation/square/square50_bcd_new}
+\put(49,90){\scriptsize{$\delta^{iso}_{\max}=3.28$}}
+\put(49,81){\scriptsize{$\delta^{iso}_{\avg}=2.22$}}
+\put(49,72){\scriptsize{$\delta^{iso}_{\dev}=0.57$}}
+\put(49,63){\scriptsize{时间 (120.12 秒)}}
+\end{overpic}
+}\hfill
+\subfloat[LIM~\cite{Schuller2013}]{
+\begin{overpic}[width=0.24\linewidth]{2D_Mesh_Deformation/square/square50_arap_lim}
+\put(50,90){\scriptsize{$\delta^{iso}_{\max}=11.64$}}
+\put(50,81){\scriptsize{$\delta^{iso}_{\avg}=1.58$}}
+\put(50,72){\scriptsize{$\delta^{iso}_{\dev}=0.66$}}
+\put(50,63){\scriptsize{时间 (3.08 秒)}}
+\end{overpic}
+}\hfill
+\subfloat[STRICT~\cite{Levi2014}]{
+\begin{overpic}[width=0.24\linewidth]{2D_Mesh_Deformation/square/square50_strimin}
+\put(50,90){\scriptsize{$\delta^{iso}_{\max}=14.02$}}
+\put(50,81){\scriptsize{$\delta^{iso}_{\avg}=1.99$}}
+\put(50,72){\scriptsize{$\delta^{iso}_{\dev}=0.55$}}
+\put(50,63){\scriptsize{时间 (78.75 秒)}}
+\end{overpic}
+}
+}
+%\vspace{-2mm}
+\caption{
+\label{fig:teaser} 二维网格模型变形，和最先进的算法进行比较。输入网格$\mT$是来自于二维正规四边形网格，一个内部控制点从右端移动到左端，并且固定所有的边界顶点。从左到右，变形的结果是来自于我们的AMIPS，BDM\cite{Lipman2012}，LIM\cite{Schuller2013}和STRICT~\cite{Levi2014}。在所有的方法中，我们的方法使用最少的时间，能获得最小的最大刚性形变$\delta^{iso}_{\max}= \max_{\mt \in \mT} \max \{\sigma^{-1}_{1, \mt}, \sigma_{2, \mt}\}$。其中$\sigma_{1,\mt}$，$\sigma_{2,\mt} \,(\sigma_{1,\mt} \leq \sigma_{2,\mt})$是三角形$\mt$上映射的Jacobian矩阵的奇异值。我们的方法也获得了更均匀，更光滑的形变分布(见刚性形变的标准差$\delta^{iso}_{\dev}$)。三角上的颜色是对刚性形变进行了编码，白色是最优的。
+}
+\vspace{-1mm}
+\end{figure}
+
+\begin{figure}[t]
+%\centerline{\hspace{0.18\linewidth} AMIPS \hspace{0.11\linewidth} BDM \hspace{0.11\linewidth} LIM \hspace{0.11\linewidth} STRICT \hspace{0.11\linewidth} LIM-AMIPS}
+\vspace{3mm}
+\centerline{
+\begin{overpic}[width=1\linewidth]{2D_Mesh_Deformation/d2d_cropped}
+{
+\small
+\put(20,37){AMIPS} \put(37,37){BDM} \put(54,37){LIM} \put(68.5,37){STRICT} \put(83,37){LIM-AMIPS}
+}
+\put(8,17){\textbf{(a)}}
+\put(8,0){\textbf{(b)}}
+{\scriptsize
+\put(20,17){(\textbf{6.20}, 2.49,\textbf{ 0.15s})} \put(35,17){(12.92, \textbf{2.47}, 30.85s)} \put(51,17){(7457.55, 31.84, 15.81s)} \put(69,17){(123.94, 2.54, 52.73s)} \put(85,17){(\textbf{6.20}, 2.49, 0.85s)}
+\put(20,0){(9.28, 2.82, \textbf{21.80s})} \put(35,0){(118, 2.52, 3125s)} \put(51,0){(22.44, \textbf{2.15}, 856s)} \put(69,0){(2384, 3.79, 693s)} \put(85,0){(\textbf{9.15}, 3.16, 93.36s)}
+}
+\end{overpic}
+}
+\caption{在模型Woody和Circle上的基于控制点的二维变形比较。第一列展示了原始模型和上面的控制点设置。三角形上的颜色代表了刚性扭曲$\delta^{iso}$。图下面的数字分别是$\delta^{iso}_{\max}, \delta^{iso}_{\avg}$和计算时间。}
+\label{fig:d2D}
+\vspace{-3mm}
+\end{figure}
+
+图~\ref{fig:teaser}展示了一个简单的二维网格变形。在一个栅格化的网格上，一个内部点被从右边移动到左边，同时所有的边界点被固定。我们将AMIPS和BDM，LIM，STRICT进行了比较。在LIM，BDM和STRICT中，ARAP能量被优化。对于BDM方法，我们尝试了不同的刚性度量界，并且选择了一个BDM能够收敛的最低的界。从结果上来看，AMIPS能够更好的控制最大和平均刚性形变。另外，AMIPS能够获得比STRICT更均匀的形变分布，而STRICT是用于设计来控制形变分布的。
+
+图~\ref{fig:d2D}展示了两个极端变形的例子。所有方法的设置与图~\ref{fig:teaser}中是一致的。尽管BDM~\cite{Lipman2012}对共形扭曲加界了，但是我们依然能够看到他们的体积形变很大，比如Circle模型的变形(见表中~\ref{table:deformstat}的统计)。在LIM的结果中，控制点附近的形变很大。没有显式的对刚性形变加界，STRICT方法产生了翻转的三角形：37个 (图~\ref{fig:d2D}(a))， 1828个 (图~\ref{fig:d2D}(b))。AMIPS是最快的，同时能控制最大共形形变和体积形变。
+
+另外，我们还在LIM的框架中优化了AMIPS能量。我们发现，LIM-AMIPS能够生成和AMIPS类似的低形变的结果，但是它比较低效，因为LIM本身使用了一个全局牛顿法的变种。在LIM框架中使用ARAP能量，刚性形变不能被很好的控制。我们的实验展示了在LIM的框架下，优化AMIPS能量能产生比优化ARAP能量更好的映射。
+
+\paragraph{三维网格模型变形}
+\begin{figure}[t]
+\centerline{\hspace{0.1\linewidth} AMIPS \hspace{0.1\linewidth}LIM \hspace{0.1\linewidth}BDM3D \hspace{0.1\linewidth}STRICT}
+\centerline{
+ \begin{overpic}[width=1\linewidth]{3D_Mesh_Deformation/d3d_cropped}
+ \put(5,-1){\textbf(c)}
+ \put(5,20){\textbf(b)}
+ \put(5,38){\textbf(a)}
+ \end{overpic}
+}
+\caption{三个四面体网格的变形。边界四面体使用颜色代表$\delta^{iso}$。原始模型是来自于Aim@Shape库。
+}
+\label{fig:deform_3D}
+\vspace{-2mm}
+\end{figure}
+
+\begin{figure}[t]
+\centerline{\hspace{0.2\linewidth} AMIPS \hspace{0.1\linewidth}LIM \hspace{0.1\linewidth}BDM3D
+\hspace{0.1\linewidth}STRICT}
+\vspace{2mm}
+\centerline{
+ \begin{overpic}[width=1\linewidth]{3D_Mesh_Deformation/cube_cropped}
+ \end{overpic}
+}
+\caption{三维模型变形。这里模型边界点被固定，三个内部点被推向很远的位置。我们展示了网格的一个切面，颜色代表$\delta^{iso}$。蓝色四面体代表刚性形变大于100，黄色的是翻转的四面体。}
+\label{fig:cube_3D}
+\vspace{-3mm}
+\end{figure}
+
+图~\ref{fig:deform_3D}和~\ref{fig:cube_3D}展示了四个三维四面体网格变形例子。 LIM， BDM3D~\cite{Aigerman2013}和STRICT的设置与二维网格变形是类似的。BDM3D 的初始网格是LIM的结果，并且选择尽量小的刚性界(通过测试后得到)，保证BDM3D 能够收敛。AMIPS方法又使用了最少的时间获得了质量最好的结果(见表~\ref{table:deformstat} 中的数据统计)。Cube模型的变形是一个具有挑战的例子，立方体中的三个控制点被推向极端位置。同样，在LIM结果中，高形变都聚集在控制点附近。BDM3D 能生成和AMIPS相似的结果，但是时间更长。STRICT产生一个不好的结果，其中有145个翻转的四面体。
+
+\subsection{无网格变形}
+基于控制点的无网格变形是计算机动画与图像编辑中的一个重要应用。为了保证映射的光滑性，一般都是使用一个基函数的集合$\mathcal{B}=\{B_i\}^m_{i=1}$来定义映射$f: \mathbb{R}^d \rightarrow \mathbb{R}^d$：
+\begin{equation} \label{eq:f_meshless}
+f(\mx) := \mx + \sum_{i=1}^m \mathbf{c}_i B_i(\mx).
+\end{equation}
+$f$在$\mx$处的Jacobian矩阵有一个很简单的形式：
+$$J(f) = I_d + \sum_{i=1}^m \mathbf{c}_i \nabla_{\mx} B_i(\mx),$$
+其中$I_d$是一个$d \times d$的单位阵，形变度量能够使用$J(f)$的奇异值来计算。受~\cite{Poranne2014}的启发，我们在一些采样点$\mathcal{Z}=\{\mathbf{z}_j\}_{j=1}^n$上定义AMIPS能量：$E^{\star}_{iso} := \sum_{j=1}^n E^{\star}_{iso,\mathbf{z}_j}$，用来控制变形中的形变。理想的变形诱导出如下的优化问题：
+\begin{equation} \label{eq:meshless}
+\min_{\mathbf{c}}  \gamma\, E_{\mathbf{pos}} + E^{\star}_{iso}
+\end{equation}
+其中$\gamma > 0$用来对位置的软约束$E_{\mathbf{pos}}$进行加权，并且在迭代的过程进行更新(更新策略和~\cite{Schuller2013}中一样)。$\mathbf{c}=[\mathbf{c}_1,...,\mathbf{c}_m]$是优化问题的变量，使用0作为初始值。在给定控制点的目标位置后，我们通过优化\ref{eq:meshless}来确定$\mathbf{c}$，最后将$\mathbf{c}$代入\ref{eq:f_meshless}中得到最终的变形结果。
+
+\begin{figure}[t]
+\centerline{Source \hspace{0.2\linewidth} AMIPS \hspace{0.2\linewidth}PGPM}
+\vspace{1mm}
+\centerline
+{
+ \begin{overpic}[width=1.0\linewidth]{Meshless/2D/d2dless3_cropped}
+  \put(15,35){\textbf(a)}
+ \put(15,0){\textbf(b)}
+ \end{overpic}
+}
+\caption{在棒形和圆盘的图像上的进行二维无网格变形。左边的一列包含了原始的图像和控制点的设置。中间是我们AMIPS的结果，右边是PGPM~\cite{Poranne2014}的结果。}
+\label{fig:meshless_2D}
+\vspace{-5mm}
+\end{figure}
+
+\paragraph{最小化}
+我们使用均匀三次张量积B样条作为基函数。在每维上存在六个控制点。所以在二维上，$\mathbf{c}$只有72个变量。因为变量的数目很小，所以我们直接使用牛顿法来优化问题~\ref{eq:meshless}。当采样点的数目很大的时候，比如20000，目标函数、梯度、Hessian矩阵的计算都是很费时的。采样点的多层结构被使用，从少到多的优化目标函数，以至于能获得交互式的反馈(在我们的实现中，三层的点数是1000/5000/20000)，图~\ref{fig:meshless_2D}中获得了63 FPS的反馈速率。在三维中，Hessian矩阵的计算更加费时(图~\ref{fig:sphere_meshless_3D}的最少点数的层上，要花将近200毫秒)，所以我们使用共轭梯度法，去平衡收敛速度与计算时间。在共轭梯度法与牛顿法中的每步线搜索中，如果在任何采样点上出现$\det(J(f))$ 为负，我们会将步长缩短，同时每步迭代的时候，保证能量下降。
+
+当控制点接近它们的期望位置时，位置的软约束能量$\gamma\, E_{\mathbf{pos}}$会在能量~\ref{eq:meshless}中占主导地位。在某些极端情形中，特别是在三维中，AMIPS能量$E^{\star}_{iso}$会越来越高，尽管相比于$\gamma\, E_{\mathbf{pos}}$它很小。在减少AMIPS能量，优化算法可能会失败，并且陷入局部最小。为了解决这个问题，我们将控制点$\mathbf{h}_k$固定在当前位置，并且将$\mathbf{h}_k = \mathbf{h}_k^0 + \sum_{i=1}^m \mathbf{c}_i B_i(\mathbf{h}_k^0)$作为硬约束，其中$\mathbf{h}_k^0$是$\mathbf{h}_k$的原始的位置。使用高斯消元将硬约束代入$E^{\star}_{iso}$，并且只优化$E^{\star}_{iso}$。在最少点的层上，我们一般进行10次左右的迭代来获得交互式的反馈。然后从新开始优化问题~\ref{eq:meshless}。这个过程被重复地进行，直至所有的控制点都移动到它们的目标位置上。
+
+\paragraph{二维无网格变形}
+在图~\ref{fig:meshless_2D}中我们将AMIPS方法与PGPM~\cite{Poranne2014}比较。我们为PGPM设置了一个尽可能低的刚性形变，以至于目标控制点位置能够被满足： 棒的是5，圆盘的是7。表~\ref{table:deformstat}展示了两个方法在采样点上的形变($1500^2$个点在棒上，$2000^2$个点在圆盘上)。PGPM能获得更小的最大刚性形变，但是棒上的共形形变，圆盘上的体积形变更大。PGPM不能同时约束共形形变和体积形变。
+
+\paragraph{三维无网格变形}
+\begin{figure}[t]
+\centerline
+{
+\begin{overpic}[width=1\linewidth]{Meshless/3D/sphere2_cropped}
+{\small
+\put(12,68){控制点设置}
+\put(60,70){无网格AMIPS}
+\put(15,32){AMIPS}
+\put(60,32){LIM}
+\put(15,-1.5){BDM3D}
+\put(60,-1.5){STRICT}
+}
+\end{overpic}
+}
+\vspace{2mm}
+\caption{使用不同的方法进行三维无网格变形。通过展示变形后的模型与他们的切面，无网格的AMIPS变形生成了很光滑的结果(见纹理贴图)。}
+\label{fig:sphere_meshless_3D}
+\vspace{-4mm}
+\end{figure}
+
+\begin{figure}[t]
+\centerline
+{
+\begin{overpic}[width=1\linewidth]{Meshless/3D/barmeshless}
+\put(10,26.3){\textbf{(a)}}
+\put(60,26.5){\textbf{(b)}}
+\put(10,-2){\textbf{(c)}}
+\put(60,-2){\textbf{(d)}}
+{\small
+\put(15,26.3){(1.56, 1.28, 0.10)}
+\put(65,26.5){(1.90, 1.43, 0.17)}
+\put(15,-2){(1.93, 1.36, 0.15)}
+\put(65,-2){(2.41, 1.68, 0.26)}
+}
+\end{overpic}
+}
+\vspace{1mm}
+\caption{使用径向基函数作为基函数，在一个棒上进行三维无网格变形。四个不同的变形结果被展示了。图下面的数字代表了$\delta^{iso}_{\max}$， $\delta^{iso}_{\avg}$， $\delta^{iso}_{\dev}$。}
+\label{fig:bar_meshless_3D}\vspace{-3mm}
+\end{figure}
+
+因为对三维中的奇异值加界是非常复杂的，所以PGPM方法很难被扩展到三维中。AMIPS方法是可以的。尽管在质量上，AMIPS没有理论保证，但是在实际中AMIPS能获得比较低的形变。图~\ref{fig:sphere_meshless_3D}展示了一个使用B样条作为基函数的无网格变形例子。和基于网格的算法AMIPS、LIM、BDM3D、STRICT进行比较。BDM3D 的共形形变界被设为AMIPS算法输出的最大共形形变。同时我们尝试设刚性形变界为AMIPS算法输出的最大刚性形变，但是BDM3D没有收敛。从切面的纹理映射结果中看到，无网格AMIPS 能产生光滑的，低形变的映射。虽然基于网格的AMIPS算法能够产生形变相当的结果，但是它的映射不是光滑的。其他的方法要么有较高的共形形变，要么有较高的体积形变，同时计算非常费时。
+
+我们在图~\ref{fig:bar_meshless_3D}中展示了使用180个高斯径向基函数作为基，4个旋转棒的例子(径向基函数的半径是最长轴的$30\%$)，我们用纹理映射展示映射的光滑性。图~\ref{fig:bar_meshless_3D}(a)，(b)中棒的右端被旋转$360^{\circ}$和$540^{\circ}$，并且固定左端。在交互式的变形中，每秒中旋转$8$度。为了保证低刚性形变，我们看到棒的中间部分离开中间位置，这是合理的。接下来，图~\ref{fig:bar_meshless_3D}(a)中棒的右端被移动，结果展示在图~\ref{fig:bar_meshless_3D} (c) 中。向上移动图~\ref{fig:bar_meshless_3D}(b)中棒的中间部位，结果展示在图~\ref{fig:bar_meshless_3D}(d)中。在变形过程中，可以从纹理的形变程度看出，刚性形变一直被维持在一个比较低的水平。在这些例子中，我们获得2 FPS 的交互反应速度。
+
+\begin{table}[t]
+\caption{二维与三维变形的数据统计和时间。在图~\ref{fig:teaser}， \ref{fig:deform_3D}(a)， \ref{fig:deform_3D}(b)， \ref{fig:deform_3D}(c)和\ref{fig:cube_3D}中，刚性形变的界分别为3.46， 2.6， 2.5， 2.9和5.9。}
+\centering \scalebox{0.65}{
+\begin{tabular}{lrrrrl}
+\toprule
+模型  & \#顶点/\#网格单元 & $\delta^{iso}_{\max}/\delta^{iso}_{\avg}/\delta^{iso}_{\dev}$ & $\delta^{con}_{\max}/\delta^{con}_{\avg}/\delta^{con}_{\dev}$ & $\delta^{vol}_{\max}/\delta^{vol}_{\avg}/\delta^{vol}_{\dev}$ & time (s) \\
+\midrule % 2D mesh
+%Fig.~\ref{fig:teaser}-AMIPS 		& 2601/5000 & \textbf{3.69}/1.85/\textbf{0.48} & \textbf{5.10}/\textbf{2.17}/0.57 & \textbf{3.80}/1.59/0.48 & \textbf{0.35} \\
+%Fig.~\ref{fig:teaser}-BDM 	& 2601/5000 & 4.34/1.83/0.59 & \textbf{5.10}/2.18/0.87 & 5.04/1.56/0.50 & 80.55 \\
+%Fig.~\ref{fig:teaser}-LIM 	& 2601/5000 & 11.64/\textbf{1.58}/0.66    & 69.98/2.41/2.53& 6.81/\textbf{1.14}/\textbf{0.21}	 & 3.08 \\
+%Fig.~\ref{fig:teaser}-STRICT 	& 2601/5000 & 14.02/1.99/0.55& 19.49/2.33/\textbf{0.51}& 10.09/1.74/0.68 & 78.75 \\
+%Fig.~\ref{fig:teaser}-AMIPS 		& 2601/5000 & 3.69/1.85/\textbf{0.48} & 5.10/\textbf{2.17}/0.57 & \textbf{3.80}/1.59/0.48 & \textbf{0.35} \\
+图~\ref{fig:teaser}-AMIPS 		& 2601/5000 & \textbf{3.25}/1.98/\textbf{0.45} & 4.20/\textbf{2.31}/\textbf{0.38} & \textbf{3.26}/1.73/0.57 & \textbf{0.35} \\
+图~\ref{fig:teaser}-BDM 	& 2601/5000 & 3.28/2.22/0.57 & \textbf{3.00}/2.64/0.45 & 4.01/1.95/0.82 & 120.12 \\
+图~\ref{fig:teaser}-LIM 	& 2601/5000 & 11.64/\textbf{1.58}/0.66    & 69.98/2.41/2.53& 6.81/\textbf{1.14}/\textbf{0.21}	 & 3.08 \\
+图~\ref{fig:teaser}-STRICT 	& 2601/5000 & 14.02/1.99/0.55& 19.49/2.33/0.51& 10.09/1.74/0.68 & 78.75 \\
+\midrule
+图~\ref{fig:d2D}a-AMIPS 		& 694/1267 & \textbf{6.20}/2.49/\textbf{1.02} 		& \textbf{8.02}/2.86/\textbf{1.08 }			& \textbf{6.19}/2.22/\textbf{1.09} 	& \textbf{0.15} \\
+图~\ref{fig:d2D}a-BDM 	& 694/1267 & 12.92/\textbf{2.47}/1.26		& \textbf{8.02}/2.95/1.36 			& 20.84/2.24/1.86	& 30.85 \\
+图~\ref{fig:d2D}a-LIM 	& 694/1267 & 7457.55/31.84/329.66	& 53476.99/121.16/1816.63 	& 1301.13/11.26/81.78 & 15.81 \\
+图~\ref{fig:d2D}a-STRICT		& 694/1267 & 123.94/2.54/5.08		& 255.14/3.71/10.72			& 60.20/\textbf{1.90}/2.62	& 52.73 \\ %37 flips
+图~\ref{fig:d2D}a-LIM-AMIPS		& 694/1267 & \textbf{6.20}/2.49/\textbf{1.02}		& \textbf{8.02}/\textbf{2.85}/\textbf{1.08}			& \textbf{6.19}/2.22/\textbf{1.09}	& 0.85 \\
+\midrule
+图~\ref{fig:d2D}b-AMIPS  		& 19720/39267 & 9.28/2.82/1.19 		& 13.60/3.77/2.10 		& 11.59/2.33/1.26 	& \textbf{21.80} \\
+图~\ref{fig:d2D}b-BDM 	& 19720/39267 & 117.55/2.52/1.83		& 13.60/\textbf{3.75}/2.24 		& 1257.07/2.04/10.25 	& 3124.57 \\
+图~\ref{fig:d2D}b-LIM 	& 19720/39267 & 22.44/\textbf{2.15}/1.33		& 196.34/5.26/9.03		& 52.09/\textbf{1.14}/\textbf{0.71} 	& 856.31 \\
+图~\ref{fig:d2D}b-STRICT 	& 19720/39267 & 2384.14/3.79/29.55	& 6611.36/6.77/65.19	& 1608.81/2.32/16.71 	& 693.43 \\ %1828 flips
+图~\ref{fig:d2D}b-LIM-AMIPS	& 19720/39267 & \textbf{9.15}/3.16/\textbf{1.15}	& \textbf{12.72}/3.88/\textbf{1.70}	& \textbf{11.21}/2.68/1.16 	& 93.36 \\
+\midrule
+图~\ref{fig:deform_3D}a-AMIPS 	& 4223/14901 & 2.91/\textbf{1.04}/\textbf{0.14} & 3.24/\textbf{1.04}/\textbf{0.17} & 2.86/\textbf{1.03}/0.13 & \textbf{1.39} \\
+%Fig.~\ref{fig:deform_3D}a-BDM 	& 4223/14901 & 3.00/1.05/0.20 & 8.71/1.08/0.42 & 6.10/\textbf{1.03}/0.15 & 98.60 \\
+图~\ref{fig:deform_3D}a-BDM3D 	& 4223/14901 & 2.60/1.05/0.20 & 6.75/1.09/0.42 & 7.51/\textbf{1.03}/0.16 & 120.23 \\
+图~\ref{fig:deform_3D}a-LIM  & 4223/14901 & 5.00/1.05/0.15 & 23.52/1.09/0.33 & 3.10/\textbf{1.03}/\textbf{0.08} & 9.03 \\
+图~\ref{fig:deform_3D}a-STRICT 	& 4223/14901 & \textbf{2.43}/1.07/0.22 & \textbf{2.83}/1.08/0.27 & \textbf{2.72}/1.06/0.20 & 79.10 \\
+\midrule % 3D mesh
+图~\ref{fig:deform_3D}b-AMIPS 	& 4465/13052 & 3.02/1.15/\textbf{0.27} & \textbf{4.02}/\textbf{1.19}/\textbf{0.29} & 3.45/1.14/0.30 & \textbf{5.82} \\
+%Fig.~\ref{fig:deform_3D}b-BDM 	& 4465/13052 & 3.51/\textbf{1.14}/0.28 & \textbf{4.02}/\textbf{1.19}/0.36 & 4.97/1.10/0.25 & 50.00 \\
+图~\ref{fig:deform_3D}b-BDM3D	& 4465/13052 & \textbf{2.50}/1.15/0.27 & 6.21/1.22/0.42 & 7.51/1.03/0.16 & 95.56 \\
+图~\ref{fig:deform_3D}b-LIM & 4465/13052 & 5.23/\textbf{1.14}/0.28 & 13.74/1.20/0.46& 3.45/\textbf{1.09}/\textbf{0.21} & 37.21 \\
+图~\ref{fig:deform_3D}b-STRICT 	& 4465/13052 & 4.43/1.23/0.31 & 9.34/1.29/0.41 & \textbf{2.93}/1.19/0.28 & 349.22 \\ \midrule
+图~\ref{fig:deform_3D}c-AMIPS 	& 1933/7537 & 3.46/1.29/\textbf{0.30} & \textbf{4.11}/\textbf{1.35}/\textbf{0.35} & 3.66/1.26/0.32 & \textbf{2.78}   \\
+%Fig.~\ref{fig:deform_3D}c-BDM 	& 1933/7537 & 4.42/1.30/0.33 & 5.00/1.41/0.48 & 4.14/1.22/0.26 & 23.82  \\
+图~\ref{fig:deform_3D}c-BDM3D 	& 1933/7537 & \textbf{2.90}/1.30/0.32 & 8.13/1.42/0.55 & \textbf{3.29}/1.22/0.26 & 47.10  \\
+图~\ref{fig:deform_3D}c-LIM & 1933/7537 & 11.82/\textbf{1.25}/0.36& 44.08/1.38/0.98& 3.59/\textbf{1.17}/\textbf{0.23} & 26.66  \\
+图~\ref{fig:deform_3D}c-STRICT 	& 1933/7537 & 4.53/1.44/0.35 & 5.99/1.58/0.48 & 4.03/1.35/0.31 & 186.13 \\
+\midrule
+图~\ref{fig:cube_3D}-AMIPS		& 2002/9242 & 6.01/2.01/\textbf{0.67} 		& \textbf{7.68}/2.80/\textbf{1.13} 		& 10.97/1.51/0.63		& 1.57 \\
+%Fig.~\ref{fig:cube_3D}-BDM 		& 2002/9242 & 8.10/\textbf{1.88}/1.01 		& \textbf{7.67}/\textbf{2.51}/1.73 		& 15.71/\textbf{1.46}/0.78 		& 37.87 \\
+图~\ref{fig:cube_3D}-BDM3D		& 2002/9242 & \textbf{5.90}/\textbf{1.74}/1.00 		& 30.35/\textbf{2.51}/2.75 		& \textbf{10.67}/\textbf{1.32}/\textbf{0.53} 		& 64.99 \\
+图~\ref{fig:cube_3D}-LIM 	& 2002/9242 & 586.4/2.57/17.84 		& 2575.5/5.51/66.96		& 129.18/1.59/5.55		& 27.92 \\
+图~\ref{fig:cube_3D}-STRICT 		& 2002/9242 & 33487.2/9.19/371.4 	& 47632.0/12.72/524.7 	& 27179.6/6.96/297.8 	& 601.64 \\ %145 flips
+\midrule % 2D meshless
+图~\ref{fig:meshless_2D}a-AMIPS 		& - & 7.29/\textbf{3.36}/1.49 & \textbf{10.23}/\textbf{4.28}/\textbf{2.55} & \textbf{8.78}/3.56/2.39 & 63 FPS \\
+图~\ref{fig:meshless_2D}a-PGPM 			& - & \textbf{5.00}/3.78/\textbf{1.38} & 25.00/5.30/3.39 & 11.12/\textbf{3.34}/\textbf{2.27} & 25 FPS \\
+\midrule
+图~\ref{fig:meshless_2D}b-AMIPS 		& - & 8.57/\textbf{4.82}/2.06	 & 10.23/4.48/2.12 & \textbf{16.12}/\textbf{6.52}/\textbf{4.51}  & 63 FPS\\
+图~\ref{fig:meshless_2D}b-PGPM 		& - & \textbf{7.11}/4.97/\textbf{1.95} 	 & \textbf{6.45}/\textbf{2.65}/\textbf{1.12}  & 43.26/11.77/8.01 & 17 FPS \\
+\midrule %3D meshless deformation
+图~\ref{fig:sphere_meshless_3D}-meshless-AMIPS & - 	  & \textbf{8.13}/3.85/1.71		& \textbf{7.70}/3.87/1.26		& 30.71/8.03/7.19 	& \textbf{2.5}   \\
+图~\ref{fig:sphere_meshless_3D}-AMIPS 		& 16805/92777 & 8.55/2.62/\textbf{1.45} 		& 8.09/2.63/\textbf{1.19} 		&\textbf{ 23.68}/4.07/3.40 	& 64.67   \\
+图~\ref{fig:sphere_meshless_3D}-BDM3D 	& 16805/92777 & 42.63/\textbf{2.26}/1.49 	& 8.09/\textbf{2.49}/1.70 		& 1191.84/2.81/7.19 & 2.06h \\
+图~\ref{fig:sphere_meshless_3D}-LIM 	& 16805/92777 & 759.83/2.41/15.34	& 3623.73/4.42/51.50	& 266.39/\textbf{1.8}/5.69 	& 9h  \\
+图~\ref{fig:sphere_meshless_3D}-STRICT	& 16805/92777 & 23.99/2.83/1.93 	& 23.24/3.10/2.10 		& 26.36/3.07/\textbf{2.03}	& 2.27h \\
+\bottomrule
+\end{tabular}}
+\label{table:deformstat}
+\vspace{-1mm}
+\end{table}
+
+\subsection{网格质量提高}
+\paragraph{六面体网格质量提高}
+\begin{figure}[]
+   \centerline{
+   \subfloat[初始六面体网格]{
+    \begin{overpic}[width=0.35\linewidth]{Mesh_improvement/all_Hex_meshes/dragon_input_L1}
+    \setlength{\fboxrule}{0.5pt}
+    \setlength{\fboxsep}{0cm}
+    \put(70,80){\fbox{\includegraphics[width=0.09\columnwidth]{Mesh_improvement/all_Hex_meshes/dragon_input_L1-zoom}}}
+    \setlength{\fboxrule}{0.2pt}
+    \put(30,35){\fbox{\includegraphics[width=0.025\columnwidth]{box}}}
+    \put(40,44){\includegraphics[width=0.1\columnwidth]{arrow}}
+  \end{overpic}
+   \begin{overpic}[width=0.33\linewidth]{Mesh_improvement/all_Hex_meshes/fertility_input_polycube}
+    \setlength{\fboxrule}{0.5pt}
+    \setlength{\fboxsep}{0cm}
+    \put(65,75){\fbox{\includegraphics[width=0.09\columnwidth]{Mesh_improvement/all_Hex_meshes/fertility_input_polycube-zoom}}}
+    \setlength{\fboxrule}{0.2pt}
+    \put(26,55){\fbox{\includegraphics[width=0.045\columnwidth]{box}}}
+    \put(38,65){\includegraphics[width=0.08\columnwidth]{arrow}}
+    \end{overpic}
+ \includegraphics[width=0.25\linewidth]{Mesh_improvement/all_Hex_meshes/Rockarm_input_Yang}
+ }
+ }
+   \centerline{
+   \subfloat[经过AMIPS提高后的结果]{
+      \begin{overpic}[width=0.35\linewidth]{Mesh_improvement/all_Hex_meshes/dragon_result_L1}
+    \setlength{\fboxrule}{0.5pt}
+    \setlength{\fboxsep}{0cm}
+    \put(70,80){\fbox{\includegraphics[width=0.09\columnwidth]{Mesh_improvement/all_Hex_meshes/dragon_result_L1-zoom}}}
+    \setlength{\fboxrule}{0.2pt}
+    \put(30,35){\fbox{\includegraphics[width=0.025\columnwidth]{box}}}
+    \put(40,44){\includegraphics[width=0.1\columnwidth]{arrow}}
+  \end{overpic}
+     \begin{overpic}[width=0.33\linewidth]{Mesh_improvement/all_Hex_meshes/fertility_result_polycube}
+    \setlength{\fboxrule}{0.5pt}
+    \setlength{\fboxsep}{0cm}
+        \put(65,75){\fbox{\includegraphics[width=0.09\columnwidth]{Mesh_improvement/all_Hex_meshes/fertility_result_polycube-zoom}}}
+    \setlength{\fboxrule}{0.2pt}
+    \put(26,55){\fbox{\includegraphics[width=0.045\columnwidth]{box}}}
+    \put(38,65){\includegraphics[width=0.08\columnwidth]{arrow}}
+    \end{overpic}
+  \includegraphics[width=0.25\linewidth]{Mesh_improvement/all_Hex_meshes/Rockarm_result_Yang}
+  }
+  }
+ \caption{ 六面体网格质量提高。 输入网格(a)分别来自于\cite{Huang2014}，\cite{Gregson2011}和\cite{Li2012}。 (b)是我们提高的结果，从放大的局部图上来看，它们更加规整。}
+ \label{fig:improve_hex}
+ \vspace{-1mm}
+\end{figure}
+
+\begin{table}[t]
+\caption{六面体网格质量提高的质量数据统计与运行时间。提高后的网格质量使用加粗表示，输入的质量在括号中。}
+\centering \scalebox{1.0}{
+\begin{tabular}{lrrl}
+\toprule
+模型  & \#顶点/\#六面体 & $J_{\min}/J_{\avg}/J_{\dev}$ & time (s) \\
+\midrule
+Dragon 			& 131367/117725 &\textbf{0.33}({0.15})/\textbf{0.92}({0.86})/\textbf{0.07}({0.14}) & 22.5 \\
+\midrule
+Fertility & 23653/19870 &\textbf{0.46}({0.20})/\textbf{0.94}({0.91})/\textbf{0.06}({0.10}) & 3.8 \\
+\midrule
+Rockarm 		& 12751/10600 &\textbf{0.55}({0.20})/\textbf{0.92}({0.86})/\textbf{0.08}({0.13}) & 2.1 \\
+\bottomrule
+\end{tabular}}
+\label{table:hex_stat}
+\vspace{-3mm}
+\end{table}
+
+在几何建模和有限元分析中，高质量的六面体网格存在大量需求。从六面体网格生成算法出来的网格，经常拥有质量比较差的网格单元。注意到一个六面体的每个顶点和相邻的三个顶点形成一个四面体，所以我们六面体网格质量提高的目标是，这些四面体和立方体的三直角四面体相似。所以我们在这些四面体上优化共形的AMIPS能量，并且保持表面点还依旧在原始形状上。我们使用inexact BCD来最小化这些能量。
+
+图~\ref{fig:improve_hex}展示了我们提高六面体网格质量后的结果。原始网格(Dragon，Fertility，Rockarm)分别通过~\cite{Huang2014}，~\cite{Gregson2011}和~\cite{Li2012}生成。并且已经被Mesquite~\cite{Brewer2003}优化过。我们的方法能显著地提高六面体网格的质量(见表~\ref{table:hex_stat}中六面体的缩放Jacobian 行列式值，最优值为1)。
+
+\paragraph{各向异性四面体网格质量提高}
+\begin{figure}[t]
+\centerline{输入\hspace{0.12\linewidth} LCT\hspace{0.12\linewidth} IMRM\hspace{0.1\linewidth} EIMRM\hspace{0.1\linewidth}AMIPS}
+\centerline
+{
+ \begin{overpic}[width=0.9\linewidth]{Mesh_improvement/anisotropic_mesh/aniso_impro_cropped}
+  \put(8.5,16.5){\textbf(a)}
+  \put(8.5,-2.5){\textbf(b)}
+ \end{overpic}
+}
+\vspace{2mm}
+\caption{各向异性四面体网格质量提高。sliver四面体(在逆变换后，存在小于$15^\circ$的二面角的四面体)使用红色显示。我们的算法能够去除所有的sliver四面体。}
+\label{fig:improve_tet}
+\vspace{-3mm}
+\end{figure}
+
+\begin{table}[t]
+\caption{各项异性四面体网格质量提高的数据统计与时间。$\theta_{\min}$， $\theta_{\avg}$， $\theta_{\dev}$代表的是每个四面体中的最小二面角的最小，平均，标准差。$\theta_{\max}$代表的是所有四面体中最大二面角。 $\rho_{\max}$， $\rho_{\avg}$， $\rho_{\dev}$是半径-边长-比测度的最大，平均，标准差。}
+\centering \scalebox{0.5}{
+\begin{tabular}{lrrrrrrrl}
+\toprule
+模型  & \#顶点/\#四面体 & $\theta_{\min}/\theta_{\max}/\theta_{\avg}/\theta_{\dev}$ & $\rho_{\max}/\rho_{\avg}/\rho_{\dev}$ & $\delta^{iso}_{\max}/\delta^{iso}_{\avg}/\delta^{iso}_{\dev}$ & $\delta^{con}_{\max}/\delta^{con}_{\avg}/\delta^{con}_{\dev}$ & $\delta^{vol}_{\max}/\delta^{vol}_{\avg}/\delta^{vol}_{\dev}$ &\#sliver四面体 & 时间(s) \\
+\midrule
+图~\ref{fig:improve_tet}a-输入		& 4997/25848 & $0.0^\circ/180.0^\circ/40.4^\circ/14.6^\circ$ 	 & $10^6/821.4/10^4$ & $10^6/4000/10^4$ & $10^6/7592/10^5$ & $10^5/1900/10^4$ & 1864  & -   \\
+图~\ref{fig:improve_tet}a-LCT		 	& 4739/22427 & $9.1^\circ/165.3^\circ/44.7^\circ/10.7^\circ$	 & 5.56/0.89/0.18 & 8.47/1.72/0.57		& 14.78/2.29/0.96		& 10.13/\textbf{1.33}/0.37	& 72	& 3.91 \\
+图~\ref{fig:improve_tet}a-IMRM          & 4997/23663 & $9.2^\circ/165.8^\circ/\mathbf{46.0^\circ}/9.5^\circ$  & 6.33/\textbf{0.87}/0.18 & 8.26/\textbf{1.66}/0.39 & 13.49/2.18/0.77 & 5.69/1.36/0.30 	 &  40   & \textbf{0.76}\\
+图~\ref{fig:improve_tet}a-EIMRM         & 4997/23661 & $10.5^\circ/160.6^\circ/45.6^\circ/9.5^\circ$  & $3.69/0.88/0.16$ & 5.81/1.67/0.36 & 10.63/2.20/0.71	& \textbf{4.21}/1.36/\textbf{0.29} & 17    & 0.86\\
+图~\ref{fig:improve_tet}a-AMIPS 	    &4997/23668 & $\mathbf{18.1^\circ}/\mathbf{149.6^\circ}/45.7^\circ/\mathbf{8.8^\circ}$ & $\textbf{2.65}/0.88/\textbf{0.15}$ & \textbf{4.34}/1.68/\textbf{0.31} & \textbf{6.07}/\textbf{2.17}/\textbf{0.57} & 6.00/1.45/0.39  &\textbf{0}	& 0.85  \\
+\midrule
+图~\ref{fig:improve_tet}b-输入		& 6563/33734 & $0.0^\circ/180.0^\circ/46.6^\circ/11.9^\circ$  &$10^6/2303/10^4$& $10^8/10^5/10^6$ & $10^8/10^5/10^6 $& $10^7/10^4/10^6$ & 844  & -   \\
+图~\ref{fig:improve_tet}b-LCT		 	& 6554/32668 & $15.3^\circ/159.5^\circ/48.9^\circ/9.2^\circ$   &2.75/0.83/0.13& 5.45/1.56/0.39 & 8.27/2.00/0.68 & 4.14/1.28/0.28& \textbf{0}	& 1.69 \\
+图~\ref{fig:improve_tet}b-IMRM          & 6563/32354 & $12.6^\circ/161.7^\circ/49.3^\circ/8.4^\circ$  &4.59/0.83/0.13& 6.33/\textbf{1.53}/0.29 & 11.70/1.97/0.57 & 3.63/\textbf{1.27}/\textbf{0.25}  & 6    & \textbf{0.98}\\
+图~\ref{fig:improve_tet}b-EIMRM         & 6563/32356 & $14.0^\circ/159.4^\circ/49.2^\circ/8.3^\circ$  &2.64/0.83/0.13& 4.89/\textbf{1.53}/0.28 & 7.99/1.97/0.55 & \textbf{3.03}/\textbf{1.27}/\textbf{0.25}  & 2    & 1.14\\
+图~\ref{fig:improve_tet}b-AMIPS 	    &6563/32357 & $\mathbf{21.5^\circ}/\mathbf{145.4^\circ}/\mathbf{49.4^\circ}/\mathbf{7.9^\circ}$  &\textbf{1.67}/\textbf{0.82}/\textbf{0.12} &\textbf{3.36}/1.54/\textbf{0.26} & \textbf{4.98}/\textbf{1.94}/\textbf{0.47} & 4.75/1.34/0.33 &\textbf{0}	& 1.04  \\
+\bottomrule
+\end{tabular}}
+\label{table:tetmesh_stat}
+\vspace{-4mm}
+\end{table}
+
+各向异性网格生成的目标是生成在黎曼度量定义的逆变换下是正单元(正三角形，正四面体)的网格~\cite{Fu2014}。注意到，将正网格元素变换到现在的网格单元上，基本要求是一个无翻转的映射，同时希望形变越低越好。我们利用AMIPS来提高各向异性的网格的质量。我们交替地移动网格顶点的位置和进行四面体网格翻边操作(图\ref{fig:flip_operation}中的2-3,3-2,2-2,4-4翻边操作)来降低$E_{iso}^{\star}$，正网格元素的边长根据各向异性网格生成的目标边长确定。这里我们没有使用共形能量$E_{mips}^{\star}$，因为在各项异性网格生成中，单元的大小是有要求的，所以相似变换不能满足要求。另外在各向异性网格质量提高中，一个经常使用的能量是~\cite{Jiao2011}：
+$$E_{imrm}(J(f))= \frac{1}{3}\frac{\| J(f) \|^2_{F}}{\det(J(f))^{2/3}}+E_{\det}(J(f)).$$
+所有四面体上$E_{imrm}(J(f))$的和被称为IMRM能量$E_{imrm}$。和指数函数进行组合，我们定了一个新的EIMRM 能量：
+$$E_{eimrm}=\sum \exp({s \cdot E_{imrm}(J(f))}).$$
+我们将AMIPS与LCT~\cite{Fu2014}，IMRM，EIMRM进行比较。
+
+图~\ref{fig:improve_tet}展示两个例子。输入网格来自LCT~\cite{Fu2014}，并且没有经过去除sliver四面体的后处理。所有的方法都显著的减少sliver四面体个数目。AMIPS能够获得最大的最小二面角，和最小的最大刚性形变。EIMRM比IMRM更好，因为使用指数函数能够更好的抑制最大形变。
+
+从六面体和各向异性四面体网格质量提高的结果来看，可以看到最优映射能显著的提高网格质量。第~\ref{chap:LCT}章设计了LCT来生成各向异性网格，第~\ref{chap:polycube}章通过构造多立方体结构来生成六面体网格，这些算法最后都可以利用AMIPS来提高质量，使得网格质量达到最优。
+
+\section{本章小结}
+通过回顾著名的MIPS算法，我们提出了增强的MIPS算法：AMIPS，并使用inexact BCD优化，能够高效率地抑制最大共形/刚性形变。我们在很多的应用上，包括网格参数化，网格变形，无网格变形与网格质量提高，展示了AMIPS算法的高效率和好效果。我们相信AMIPS方法对于计算机图形学中的其它应用也会起到非常积极的作用，希望未来可以发掘更多的应用，完成以前不能达到的目标。我们在第\ref{chap:affine}章和\ref{chap:polycube}章中利用AMIPS并结合其他新颖的方法对网格映射和多立方体结构构造等问题给出了更好的解决方案。
+
+\begin{figure}[t]
+\centerline
+{
+\subfloat[]{
+\begin{overpic}[width = 0.45\linewidth]{bunny_circle_ours}
+\end{overpic}
+}\hfill
+\subfloat[]{
+\begin{overpic}[width = 0.45\linewidth]{bunny_LABF_ours}
+\end{overpic}
+}
+}
+\caption{在Bunny(1.2M个顶点， 2.5M个面)模型上的共形参数化结果，它们的初始映射是圆盘初始(a)，LABF的结果(b)。共形形变的最大值，平均值和标准差为(2.29,1.01,0.013)(a)和(2.25,1.00,0.006)(b)。}
+\label{fig:big}
+\vspace{-3mm}
+\end{figure}
+
+\begin{figure}[t]
+\centerline
+{
+\subfloat[]{
+\begin{overpic}[width = 0.45\linewidth]{fail_case}
+\end{overpic}
+}\hfill
+\subfloat[]{
+\begin{overpic}[width = 0.45\linewidth]{fail_case_success}
+\end{overpic}
+}
+}
+\caption{刚性参数化结果，使用默认参数(a)，细调的参数化(b)。}
+\label{fig:fail}
+\vspace{-4mm}
+\end{figure}
+
+\subsection{AMIPS方法的不足之处}
+以下我们讨论AMIPS方法的一些不足。
+
+\paragraph{合适的初始化}
+和BDM不一样，但是和标准的MIPS，LIM类似，我们的优化需要一个无翻转映射作为输入。在我们的实验中，对于平面参数化而言，我们选择凸圆盘映射作为有效的初始。但是当初始有很大的形变时，我们的方法可能需要更多的迭代才能使能量收敛。比如我们要花费差不多2 小时来共形参数化一个拥有1.2M个顶点的Bunny模型。从另外一个角度上来看，线性方法LSCM~\cite{Levy2002} 或者 LABF~\cite{Zayer2007}有可能可以提供一个好的初始化。在同一个模型上，从LABF 的的结果开始，我们的算法只要2 分钟左右，并且产生高质量的结果，如图~\ref{fig:big}所示。但是注意，线性方法不能保证一定生成无翻转的映射。所以我们希望能开发出对初始不敏感的算法，在第\ref{chap:affine} 章中我们给出进一步的结果。
+
+使用网格去缠绕的技术，比如~\cite{Escobar2003}，来去除翻转的三角形，也是一个很有用的预处理技术。然而，在去除翻转三角形的成功上没有理论保证。我们会在未来的工作中去处理这个问题。
+
+\paragraph{AMIPS的参数选择}
+在AMIPS能量函数中有两个参数：$s$和$\alpha$。~\ref{sec:AMIPS}节中的默认参数，对于大部分的输入，能工作地很好。
+但是在刚性网格参数化中，如果在初始的凸圆盘映射上存在很大的体积形变，那么在计算AMIPS能量和其梯度上会存在数值不稳定的情况，以至于使用默认的参数会导致很高的形变。图~\ref{fig:fail}(a)展示了一个参数化手模型的例子。使用默认参数的AMIPS算法没能成功地生成低形变的结果。为了解决这个问题，在开始的1000次迭代中，我们首先选择了一个比较小的$s = 0.1$来减轻不稳定和减少形变。然后使用默认的参数进行优化。 图~\ref{fig:fail}(b)展示了提高的结果。在未来的工作中，我们希望开发这个策略的自动化版本。
+
+\paragraph{形变的界}
+因为AMIPS实际上是一个使用非线性优化方法去计算无翻转的、低形变的映射，所以我们在最大形变上没有显式的控制，这与BDM~\cite{Lipman2012,Aigerman2013,Aigerman2014,Poranne2014}是不一样的。然而，事前确定尽可能低的形变界是不容易的。在~\cite{Lipman2012}中提到的二分策略是非常费时。我们发现AMIPS的结果能对形变的最小上界提供一个很好的估计，可以作为其他方法的初始化输入。
+
+\paragraph{控制点的轨迹}
+在变形应用中如果控制点的轨迹相互之间存在冲突，那么在网格变形中，会不存在无翻转的映射~\cite{Jin2014}。一个极端的情况，求解固定所有边界点的映射。当位置的约束是硬约束时，我们的AMIPS会失败。在优化中加入从新三角化~\cite{Weber2014} 或者改变网格连接关系~\cite{Jin2014}，可能可以解决这个问题。在第\ref{chap:affine} 章中我们将引入新颖的方法解决这个问题，使得算法和控制点的约束无关。

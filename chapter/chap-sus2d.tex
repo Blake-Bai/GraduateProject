@@ -1,0 +1,16 @@
+\chapter{2维三角形或四边形网格的优化} \label{chap:sus2d}
+固定网格的连接关系以及一些点位置的约束，网格优化技术通过移动自由点的位置最优化某种网格质量的度量。网格质量的度量与需求有关，(ref intro-meshquality)定义了几种合理的度量。本章基于(ref sus2d)的方法，把得到无翻转网格和提高网格质量合并为一个优化过程。通过改变非拐角点的位置，就可以快速地得到无翻转且高质量的网格。
+
+\section{目标函数设计}\label{sec:objectives}
+为了得到均匀且正交性良好的四边形网格，\ref{sec:sus}节采用了(ref sus2d)中可以同时惩罚翻转单元和低质量单元的目标函数，\ref{sec:vertical}节设计了以直角为目标的网格度量。
+\subsection{同时解决翻转网格和提高网格质量的度量}\label{sec:sus}
+我们在(ref intro-meshquality)中定义的度量虽然能表达一个有效网格的质量，但无法处理有翻转三角形或四边形的网格。这是因为它们无法连续地定义在整个$\mR_2$空间上，特别地，当某个三角形或四边形连续地从一个定向变为退化再变为另一个定向时(ref intro-inverted)，这些度量函数的变化是不连续的。因此，许多网格优化的技术都需要为此定义不同的目标函数，先得到无翻转的网格，再提高网格质量，而这种方法无疑需要较多的迭代次数并且很容易收敛到较差的局部极小值。
+
+考虑用雅可比矩阵$J$的条件数$\kappa$(condional)度量给定四边形与正方形的差距，首先将其重写为
+\begin{equation} \label{equ:kappa}
+\kappa_m=\frac{\left|J_m\right|_F \cdot \left|J_m^{-1}\right|_F}{2}=\frac{\left|J_m\right|_F^2}{2\sqrt{|\sigma_m|}}
+\end{equation}
+其中$m=1,2,...4n，n$为四边形的个数，$\sigma_m=det(J_m)$。显然$\kappa_m$的达到最大值1当且仅当这个三角形是等腰直角三角形，故$\kappa_m$在$\sigma_m=0$处不连续，即它不能表达退化或翻转单元的质量。
+\subsection{以直角为目标的四边形网格度量}\label{sec:vertical}
+
+\section{优化策略} \label{sec:optimization}

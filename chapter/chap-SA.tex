@@ -1,0 +1,550 @@
+﻿\chapter{组装无翻转低形变映射} \label{chap:affine}
+我们继续研究在三角形和四面体网格上计算无翻转的映射，尝试解决第~\ref{chap:AMIPS}章中遗留的问题，比如对初始映射比较敏感，不能处理拥有大量控制点的网格变形。我们的想法很简单：将分段线性仿射变换作为未知量，从而将映射计算转化为一个无约束优化问题(~\ref{sec:affine} 节)；将初始映射中翻转的、不合法的仿射变换投影到一个可行解中(~\ref{sec:disassembly}节)；并且在优化过程中，维持仿射变换一直在可行解空间内。优化方法的实现细节在~\ref{sec:assembly}节中呈现。同时还发现，计算一个无翻转的映射是等价于寻找一个合法的可积标架场(~\ref{sec:field} 节)。
+
+\section{无翻转网格映射的问题描述} \label{sec:affine}
+设映射的原象是一个$d$维的网格$\mM$，包含$N_v$个顶点$\{\mv_i, i=1,\ldots,N_v\}$，$N_e$条边$ \{\me_i, i=1,\ldots,N_e\}$，$N$个网格单元(三角形或者四面体)$\{\ms_i, i=1,\ldots, N\}$。一般三角形或者四面体网格的映射被描述成一个分段线性的仿射变换\cite{Lipman2012,Aigerman2013}。$\{\mA_i,\mTs_i\}$ 代表了每个网格单元$\ms_i$上的仿射变换，其中的线性变换部分$\mA_i$ 是一个$d \times d$的矩阵，$\mTs_i$是平移向量。对于一个无翻转的分段线性仿射变换$\Phi$ 而言，它应该满足如下的约束。
+
+\textbf{边组装约束。} 对于任意两个相邻的网格单元$\ms_i$和$\ms_j$，它们共享边$\mv_a\mv_b$，我们强加如下的约束：
+\begin{align}
+%\begin{split}
+\mA_i \mv_a + \mTs_i &= \mA_j \mv_a + \mTs_j; \label{eqn:edge_assmebly_old1} \\
+\qquad \mA_i \mv_b + \mTs_i &= \mA_j \mv_b + \mTs_j. \label{eqn:edge_assmebly_old2}
+%\end{split}
+\end{align}
+这个约束描述的是，不同网格单元上的顶点(输入网格上是同一个顶点)经过映射后的位置是一样的。这样就保证了所有输出的网格单元可以组装起来，维持输入网格的连接关系。
+
+\textbf{控制点组装约束。} 对于每个包含控制点$\mv_h$的网格单元$\ms_i$，控制点$\mv_h$的目标位置是已知的位置$\mv^{\star}_h$(用户输入的目标位置)，约束是：
+\begin{equation}
+\mA_i \mv_h + \mTs_i = \mv^{\star}_h. \label{eqn:handle_assmebly_old}
+\end{equation}
+在网格变形的应用中，用户会指定很多的控制点。这个约束描述的就是映射需要将控制点移动到目标位置。因为优化过程中，网格单元被分离了，所以需要所有与控制点相连的网格单元都满足上述的约束。
+
+\textbf{无翻转约束。}
+\begin{equation}
+\det \, \mA_i > 0, \quad \forall i.
+\end{equation}
+这个约束是最优映射的基本要求，它是非线性的。
+
+\textbf{形变界约束。}设$\sigma_{i,1},\ldots,\sigma_{i,d}$是$\mA_i$的奇异值。我们使用MIPS能量~\cite{Hormann2000,Fu2015}来定义共形能量：
+\begin{equation} \label{eqn:conformal_c}
+\begin{split}
+d^c_i := \dfrac{1}{2^d}\prod_{k < l} \left(\sigma_{i,k} \, \sigma^{-1}_{i,l} + \sigma^{-1}_{i,k} \, \sigma_{i,l}\right) = \left\{
+\begin{array}{lr}
+  \dfrac{1}{2}\|\mA_i\|_F \|\mA^{-1}_{i}\|_F = \dfrac{\trace{\mA_i^T\mA_i}}{2\det \mA_i} & d=2; \\
+  \dfrac{1}{8}(\|\mA_{i}\|_F^2\|\mA^{-1}_{i}\|_F^2 -1 ) & d=3.
+\end{array}
+\right.
+\end{split}
+\end{equation}
+其中$\|\cdot\|_F$代表的是矩阵的Frobenius范数。体积形变能量被定义为：
+\begin{equation} \label{eqn:volume_v}
+d^{vol}_i := \dfrac{1}{2}\left(\det \mA_i + (\det  \mA_i)^{-1}\right).
+\end{equation}
+如果用户设定共形形变的界$K_{\textrm{c}}$，那么我们加上如下的约束$ d^c_i \leq K_{\textrm{c}}$。类似的，给定体积形变的界$K_{\textrm{vol}}$，使用$ d^{vol}_i \leq K_{\textrm{vol}}$约束体积形变。我们知道一个映射是刚性变换，当且仅当它是共形的、保面积(体积)的。所以如果共形形变和体积形变的界都被设定，我们会将刚性形变
+\begin{equation} \label{eqn:isometric_i}
+d^{iso}_i := \gamma \, d^c_i + (1-\gamma) \, d^{vol}_i
+\end{equation}
+约束在$\gamma \, K_{\textrm{c}} + (1-\gamma) \, K_{\textrm{vol}}$ 下。在我们文章中，$\gamma=0.5$。
+很多时候，我们希望能够保证最大的形变在某个界下，使得映射的质量有保障。
+
+\textbf{目标。} 一般情况下，寻找一个满足上述约束的分段线性仿射变换，被描述为一个拥有不等式约束的非凸，非线性的优化问题。但是将仿射变换作为变量后，我们可以将这个问题转化成一个无约束非线性优化问题。寻找满足上述约束的映射$\Phi$的优化问题定义为：
+\begin{equation} \label{eqn:obj}
+\Min\limits_{\mA_1,\ldots,\mA_N \atop \mT_1, \ldots, \mT_N} \quad  \lambda\, \mEa + \mEc + \mu \, E_m.
+\end{equation}
+其中将边组装约束和控制点组装约束作为软约束，记$\mEa$为它们的平方和。$E_m$是一个用户定义的能量函数，用来满足用户的期望。$\mEc$是一个障碍函数，用来防止出现网格单元翻转，并对变换的形变加界。
+
+优化问题\ref{eqn:obj}中的未知数是所有的仿射变换。如果每个网格单元上的仿射变换是任意给定的，那么这时候所有输入网格单元被分离，也就是不满足边组装约束和控制点组装约束。因此在我们的优化中，将边组装约束和控制点组装约束作为软约束来处理。系数$\lambda > 0$ 是一个在优化过程中动态调整的参数，可以使所有的网格单元在最后一步组装起来，意思是优化结束后的$\mEa$要接近于0，比如$\mEa<10^{-12}$。
+
+$E_m$是一个用户定义的能量函数，使用$\mu$加权，比如Green-Lagrange能量$\sum_i \|\mA_i \mA_i^T - \mathbf{I}\|_F^2$，与初始映射$\{\mA_i^0,i=1,\ldots,N\}$ 的距离$\sum_i \|\mA_i - \mA_i^0\|_F^2$，又或者变换的光滑性$\sum_{k \neq l \atop \ms_k \cap \ms_l \neq \emptyset} \| \mA_k - \mA_l\|^2$。具体使用哪个形式，用户可以自行设定，在我们实验部分(\ref{sec:affine_results}节)的每个例子中，都说明使用哪个$E_m$。如果$\mu=0$，也就是说这项能量没有被考虑。一个初始的映射网格$\mM^0$ 能够通过只优化$E_m$ 来获得，或者直接由用户提供，对于初始映射上是否出现翻转，我们没有要求。
+
+\textbf{$\mEc$的设计。} 注意到$d^c_i$， $d^{vol}_i$ 和 $d^{iso}_i$已经能自然地抑制退化的网格单元，因为当$\det \,\mA_i$接近0时，它们会趋向于无穷(和第\ref{chap:AMIPS}章中的结论是一致的)。我们使用这些表达(公式\ref{eqn:conformal_c}，\ref{eqn:volume_v}，\ref{eqn:isometric_i})作为组件来设计$\mEc$，用来对形变加界、防止网格单元的退化。我们沿袭\cite{Fu2015}(AMIPS)的方法，使用指数函数来抑制最大形变。$\mEc$按照如下的方法设计：\begin{enumerate}
+  \item 如果形变$d^\star$的类型和界$K_\star$给定，
+  \begin{equation}
+  %\mEc = \sum_{i=1}^N \gamma \frac{e^{s \cdot d^{c}_i}}{K_{conf} - d^c_i} + (1-\gamma)\frac{e^{s \cdot d^{vol}_i}}{K_{vol} - d^{vol}_i} ;
+  \mEc^{\star} = \sum_{i=1}^N  \frac{e^{s \cdot d^{\star}_i}}{K_{\star} - d^{\star}_i};
+  \end{equation}
+  \item 如果只有形变$d^\star$类型给定或者$K_\star = +\infty$，
+   \begin{equation} \label{equ:K_infty}
+  \mEc^{\star} = \sum_{i=1}^N e^{s \cdot d^\star_i}.
+  \end{equation}
+\end{enumerate}
+其中形变的类型($\star$)指的是共形形变，或者体积形变，或者刚性形变。一般在很多应用中，只有共形形变和刚性形变常被考虑，在我们实验部分(\ref{sec:affine_results}节)，我们说明了使用哪种类型的形变。形变界$K_\star$给定的意思是$K_\star$被设定为一个大于1的实数。
+这里$s$是用来控制最大形变，在我们的实验中，对于二维映射，我们使用$s = 4$；对于三维映射，设$s = 2$。对于刚性形变而言，在扭曲界$K_{\textrm{iso}}$给定的情况下(这时也会给定$K_{\textrm{c}}$和$K_{\textrm{vol}}$)，我们会使用：
+\begin{equation} \label{equ:iso_bound}
+ \mEc^{iso} = 0.5 \cdot (\mEc^{c} + \mEc^{vol}),
+\end{equation}
+来控制刚性形变；如果形变界$K^\star = +\infty$时，我们就直接使用公式\ref{equ:K_infty}来优化刚性形变。
+如果用户喜欢一个更优的$E_m$，我们能够修改障碍函数，当映射形变比设定的形变界小很多的时候，就让$\mEc$接近于0，比如，使用~\cite{Schuller2013} 提出的三次样条函数的相反数。
+
+\section{网格分离} \label{sec:disassembly}
+\begin{figure}[t]
+ \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/process2}
+    \put(29,27){\textbf(a)}
+    \put(67,27){\textbf(b)}
+    \put(20,-3){\textbf(c)}
+    \put(52,-3){\textbf(d)}
+    \put(82,-3){\textbf(e)}
+    \end{overpic}
+    }
+    \vspace{3mm}
+  \caption{网格分离与优化过程。输入网格和初始映射和图~\ref{fig:teaser_affine}是一样的。(a)初始映射，黄色的部分展示了翻转的三角形；(b)分离的网格，不满足边组装的约束和控制点组装的约束；(c，d)：经过4和6 次迭代的中间结果，可以看到三角形已经渐渐的组装起来了；(e)经过20次迭代后最后结果，三角形完全组装完毕，并且形变得到了控制，没有出现翻转的三角形。}
+  \label{fig:disassembly}
+  \vspace{-3mm}
+\end{figure}
+
+假设输入初始的网格$\mM^0$，从对应的网格单元$\triangle \mv_{i,0}\cdots\mv_{i,d}$和$\triangle \mv^0_{i,0}\cdots\mv^0_{i,d}$，通过求解$\mA^0_i \mv_{i,k} + \mTs^0_i = \mv^0_{i,k}, k=0,\ldots,d$，可以获得初始的$\mA^0_i$ 和$\mTs^0_i$：
+\begin{align}
+%\begin{split}
+\mA^0_i &= \left(\mv^0_{i,0}-\mv^0_{i,1} | \cdots | \mv^0_{i,0}-\mv^0_{i,d}\right)\left(\mv_{i,0}-\mv_{i,1} | \cdots | \mv_{i,0}-\mv_{i,d}\right)^{-1} \\
+\mTs^0_i &= \mv^0_{i,0} - \mA^0_i \mv_{i,0} .
+%\end{split}
+\end{align}
+为了最小化目标函数~\ref{eqn:obj}，初始的$\mA^0_i$应该在可行解空间$\Omega$中，这里$\Omega$通过无翻转的、形变界的约束来定义，使得$E_\textrm{C}$能够被作为障碍函数来使用。在我们的文章中，如果优化目标是共形形变，$\mA^0_i$ 被投影为离$\mA^0_i$ 最近的相似矩阵；如果优化目标是共形形变，将$\mA^0_i$投影到离$\mA^0_i$ 最近的旋转矩阵~\cite{Liu2008}。将投影后的变换应用到原始$\mM$，$\mM$被分离成一个个不相连接的网格单元。这个过程被称为\emph{网格分离}。优化目标函数~\ref{eqn:obj} 可以将分离的网格单元组装起来。图~\ref{fig:disassembly}(b)展示了一个分离的结果。
+
+\textbf{讨论1}： 如果共形形变界被设定，可以利用形变界投影的方法~\cite{Kovalsky2015}将$\mA_i^0$投影到一个可行解中，满足形变界的要求。图\ref{fig:diff_init}中展示了使用不同初始化的进行映射计算的例子。
+%Figure~\ref{fig:diff_init}(c) shows an example.
+
+\section{组装分离的网格算法实现细节} \label{sec:assembly}
+本节首先在\ref{subsec:affine_vars}中讨论了如何消去冗余的平移变量，然后在\ref{subsec:affine_numopt}节中介绍了我们使用的优化算法的细节。
+
+\subsection{$E_\textrm{assembly}$修改和平移变量的消元} \label{subsec:affine_vars}
+我们观察到，当$\lambda\,\mEa$主导目标函数时，目标函数变成病态的，因为这时$\mEa$的Hessian矩阵是非正定的、病态的，并且大数值的$\lambda$使得$\mEa$的Hessian 矩阵在整个能量函数的Hessian矩阵中占主导地位，导致优化不能继续进行，导致不能使$\mEa$ 趋于0。 因此我们可以断定平移变量中部分是冗余的。从几何上来讲，如果分离的网格单元能够被组装，那么我们只需要固定一个网格单元，其他的网格单元都可以自动地进行平移，使所有的网格单元都组装上。所以为了计算一个无翻转的映射，我们不需要知道所有的$\mTs_i$。 我们提出了如下的方法，用来尽量消除平移变量的冗余。
+
+设$\mathbf{G}$是网格的一个无权、无定向的图。$\mathbf{H} = \{\mv_h\}$是控制点集，它们的目标位置是已知的。我们计算$\mathbf{G}$的一个最小树$\mathcal{T}$(注意不是最小生成树)，连接所有的控制点。对于每条边$\me \in \mathcal{T}$我们选择一个与其相连的一个网格单元，并绑定上平移变量。在绑定的时候，还没有被绑定上平移变量的网格单元，拥有更高的机会被绑定。我们设这些网格单元的集合是$\Omega_s$。图~\ref{fig:reduction_graph}显示了在一个简单例子上的$\mathcal{T}$ 和$\Omega_s$。基于这些结构，我们重新定义了组装约束，并且只在$\Omega_s$上引入平移变量$\mTs$。基于上述的发现，我们重新描述计算无翻转映射的约束。
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\linewidth]{affine/tree4}
+  \caption{拥有三个控制点的三角形网格。 $\mathcal{T}$中的边使用橘红色标记，$\Omega_s$中的三角形用紫色标记。}
+  \label{fig:reduction_graph}
+  \vspace{-5mm}
+\end{figure}
+
+\textbf{边组装约束。}  对于任意两个相邻的网格单元$\ms_i$和$\ms_j$，它们共享边$\mv_a\mv_b$，我们加如下的约束：
+\begin{equation} \label{eqn:edge_assmebly}
+ \mA_i (\mv_a-\mv_b) = \mA_j (\mv_a-\mv_b).
+\end{equation}
+这个约束要求的是，原始网格上在不同的网格单元上的同一条边在映射后，是相互平行的，并且边的长度是相等的。于是在确定其中一个网格元素$\ms_i$的位置后，我们可以将另外一个网格单元$\ms_j$平移，和$\ms_i$拼接上。
+
+\textbf{顶点组装约束。} 对于每个顶点$\mv \in \mathcal{T}$和一对与$\mv$相邻的边$\me_p, \me_q \in \mathcal{T}$，我们加如下的约束：
+\begin{equation} \label{eqn:vertex_assembly}
+\mA_p \mv + \mTs_p = \mA_q \mv + \mTs_q.
+\end{equation}
+其中仿射变换是和$\me_p$和$\me_q$绑定的网格单元上的。当顶点组装约束满足的时候，存在一组连接的网格单元穿过所有的控制点。加上边组装约束，可以将整个网格无缝的拼接在一起。
+
+\textbf{控制点组装约束。}对于每个控制点$\mv_h$和它的一个相邻的边$\me_p \in \mathcal{T}$，我们加如下的约束：
+\begin{equation}\label{eqn:handle_assembly}
+\mA_p \mv_h + \mTs_p = \mv^{\star}_h.
+\end{equation}
+这个约束和之前的控制点组装约束是一样的。
+
+让$E^{\star}_\textrm{assembly}$是上述所有约束的平方和，并且在优化问题~\ref{eqn:obj}中代替$E_\textrm{assembly}$。我们能够将变量的数量，从$(d^2+d)N$($\mA_i$有$d^2$个变量，$\mTs_i$中有$d N$个变量)减少到$d^2 N + d \, |\Omega_s| $，其中$|\Omega_s|$是$\mathcal{T}$中的边的数目，远小于$N$。 注意，如果没有控制点，$\Omega_s = \emptyset$。
+
+当前面三个约束$E^{\star}_\textrm{assembly} = 0$，和无翻转约束$\det \, \mA_i > 0, \forall i$满足时，我们能够组装这个网格，具体的证明如下：
+\begin{proof}
+假设映射的结果$\mM^\star$被分成$m$个不相连的子网格$\mM_1,\ldots,\mM_m$, $\mM_i \bigcap \mM_j = \emptyset, \forall \, i \neq j$。$\partial^{out} \mM_k$和 $\partial^{in} \mM_k$分别代表的是$\mM_k$的外部和内部边界。接下来我们展示如何将这些子网格拼接上。
+
+首先我们构造$\mM_p$，它包含了$\Omega_s$中的所有网格单元。根据约束(\ref{eqn:vertex_assembly})，我们可以首先构造一个子网格，它包含了$\Omega_s$中的所有网格单元。然后我们将和$\Omega_s$的顶点相邻的网格单元一个一个地拼接上。因为根据约束(\ref{eqn:edge_assmebly})和无翻转的性质，它们对应的边是平行且等长的，于是上述拼接可以顺利进行。所以我们可以假设$\mM_p$是存在的，其他的子网格不包括$\Omega_s$中的任何网格单元。
+
+接下来我们分析两个简单的情况。\\
+\textbf{情况 1}： $\exists k, \partial^{in} \mM_k \neq \emptyset$。这个情况是不可能出现的；否则，在$\partial^{in} \mM_k$中必定存在一对不相连的边，它们的原象共享一定顶点，违反了约束(\ref{eqn:edge_assmebly})。\\
+\textbf{情况 2}： $\mM_k$和$\mM_l$的原象是相连的。根据约束(\ref{eqn:edge_assmebly})，这两个子网格是可以通过平移而组装起来的，并且保证没有翻转的单元出现。既然只有$\mM_p$拥有控制点，于是$\mM_k$和$\mM_l$能够自由地进行平移。我们能够保持这样的组装，拼接直至没有子网格可以被组装。
+\end{proof}
+
+如果只满足约束\ref{eqn:edge_assmebly}和\ref{eqn:handle_assembly}，是不能够将所有的网格单元组装起来的，因为不能够构造$\mM_p$。$\mM_p$的不存在导致任意的$\mM_k$和$\mM_l$不可以自由的平移进行组装。约束\ref{eqn:edge_assmebly}只保证了一对分离的边是平行，等长的，但是边可以相隔很远。约束\ref{eqn:handle_assembly}只保证了和控制点相连的网格单元是可以到达目标位置的，但是依然不存在一条路径将所有的控制点连接起来。只满足这两个约束是不够的。
+
+我们的消元过程和对$E_\textrm{assembly}$的修改实际上可以理解为，在由~(\ref{eqn:edge_assmebly_old1}),~(\ref{eqn:edge_assmebly_old2})和(\ref{eqn:handle_assmebly_old})组成的线性系统上进行了一个高斯消元过程。和直接的高斯消元相比，我们的方法更简单，并且能保证系统的稀疏性。更多的，当线性系统很大的时候，高斯消元过程可能存在很严重的数值不稳定问题。
+
+\paragraph{计算$\mathcal{T}$。} 因为我们希望去除更多的平移变量，也就是希望$\mathcal{T}$中的边是最少的。所以寻找$\mathcal{T}$实际上就是计算图的最小斯坦纳树问题，这是一个NP完全问题~\cite{Ivanov1994}。我们提供了一个简单的近似算法。
+
+\textbf{1.} 设$\mathcal{T}$为空。将控制点集合$\mathbf{H} = \{\mv_h\}$分成不相连的组$g_k, k=1,\ldots,n$，每个组中的控制点在图$\mathbf{G}$中是相连的。每个$g_i$是$\mathbf{G}$的子图。计算$g_k$的最小生成树$T_k$，并且将$T_k$加入到$\mathcal{T}$, $\forall k$。
+
+\textbf{2.} 将$g_k$作为$\mathbf{G}$的一个节点，$g_k$中的顶点被虚拟地连接，$\mathbf{G}$中没有受到影响部分的连接关系不变。在顶点$g_k$之间，计算最短路径。构造$g_k$的一个完全图$S$，图上任意两个顶点$g_i$ 和$g_j$ 之间的边长是他们之间的最短路径的长度。
+
+\textbf{3.} 构造$S$的一个最小生成树$S_t$。$S_t$的每条边对应的是$\mathbf{G}$中的一条最短路径，并且我们将这些路径加入到$\mathcal{T}$中。
+
+因为当不连接的组数目超过2时，$\mathcal{T}$的最小性不能被保证，所以冗余可能依然存在。但是在下节中，通过对Hessian矩阵的修改可以解决其不正定的、病态的问题。
+
+\subsection{数值优化} \label{subsec:affine_numopt}
+我们将所有的$\mA_i$和$\mT_p \in \Omega_s$放在一个列中形成变量的向量$\mathbf{V}$，利用牛顿法来最小化
+\begin{equation}\label{eqn:objnew}
+E = \lambda \, \mEcstar + \mEc + \mu \, E_{m}.
+\end{equation}
+更新的策略是：
+\begin{align}
+%\begin{split}
+\mathbf{H}_k &= \lambda_k \, \nabla^2 \mEcstar(\mathbf{V}_{k}) +  \nabla^2 \mEc(\mathbf{V}_{k}) + \mu \, \nabla^2 E_{m}(\mathbf{V}_{k}) \\
+\delta \mathbf{V}_{k+1}  &= -\mathbf{H}_k^{-1} \cdot \nabla E(\mathbf{V}_{k}) \\
+\mathbf{V}_{k+1} &= \mathbf{V}_{k} + \alpha_k  \cdot \delta \mathbf{V}_{k+1}.
+%\end{split}
+\end{align}
+其中$\alpha_k$用来降低$E$而使用的回溯线索搜步长。 $\lambda$是一个自适应改变的，用来使$\mEcstar$趋向于0。更新的规则如下：
+\begin{equation}
+ \lambda_{k+1} = \min\left( \lambda_{\min} \cdot \max\left( \dfrac{ \mEc(\mathbf{V}_{k})+ \mu \, E_{m}(\mathbf{V}_{k})}{ \mEcstar(\mathbf{V}_{k})} , 1 \right), \lambda_{\max}\right).
+\end{equation}
+$\lambda_{\min}$和$\lambda_{\max}$是$\lambda$的最小与最大值。在我们的实验中，$\lambda_{\min} = 10^3$和$\lambda_{\max} = 10^{16}$。在下一次迭代中，我们自动调节的$\lambda_k$使得$\mEcstar$占主导地位的，这样可以使$\mEcstar$ 更快地趋于0。当$\mEc$变的非常大时(接近于退化的网格单元)，由于$\lambda_k$会被$\lambda_{\max}$约束住，而使$\mEc$在整个能量函数中占主导地位，优化算法能够更多地惩罚$\mEc$。当$\mEc$变得比较小的时候，$\mEcstar$会根据自动调节的$\lambda_k$使$\mEcstar$占主导地位。这个想法是和\cite{Schuller2013}类似，但是我们不需要一直增大$\lambda_k$。同样$\lambda_k$的最大值保证了Hessian矩阵的病态不会被无限地放大。
+
+\begin{figure}[t]
+  \vspace{3mm}
+  \centering
+  \begin{overpic}[width=0.85\linewidth]{affine/hessian}
+  \put(100,0){\# iter}
+  \put(0,45){$\mEcstar$}
+  \put(85,37.5){\small Our modification}
+  \put(85,41){\small $\tau_k \mathbf{I} +\mathbf{H}_k$}
+  \put(0.5,-3){\small 0}
+  \put(18,-3){\small 10}
+  \put(36,-3){\small 20}
+  \put(53,-3){\small 30}
+  \put(71.5,-3){\small 40}
+  \put(89,-3){\small 50}
+  \put(-10,1){\small 1e-15}
+  \put(-10,14){\small 1e-10}
+  \put(-8,26.5){\small 1e-5}
+  \put(-3,40){\small 1}
+  \end{overpic}
+  \vspace{1mm}
+  \caption{\#迭代次数 vs.\ $\mEcstar$。 黑色的收敛曲线是方法$\tau_k \mathbf{I} +\mathbf{H}_k$的。橘红色的收敛曲线是我们Hessian矩阵修改方法的结果，能更快地收敛。 }
+  \label{fig:hessian}
+  \vspace{-4mm}
+\end{figure}
+
+\paragraph{Hessian矩阵调整} Hessian矩阵$\mathbf{H}_k$的不正定性可以在优化中被修改~\cite{Nocedal2006}。通过观察，我们发现不正定性来自$\mEc$的Hessian 矩阵和冗余的平移变量，我们提出了如下的Hessian矩阵修改策略。
+\begin{enumerate}
+\item 注意到$\nabla^2 \mEc(\mathbf{V}_{k})$是一个块对角矩阵，其中的每块$\mathbf{B}_i$是一个$d^2 \times d^2$的矩阵。如果$\mathbf{B}_i$的最小特征值$\kappa_i$是非正的，我们将$(-\kappa_i+10^{-8}) \mathbf{I}_{d^2\times d^2}$加到$\mathbf{B}_i$上。
+
+\item 对于平移变量，将$10^{-6}\lambda_k$加到$\mathbf{H}_k$的对角线上。这个操作等于在$E$上加一个规则项$10^{-6}\lambda_k\,\|\mT\|^2$。
+
+\item 如果通过第1\&2步的修改，Hessian矩阵还是不正定时，将$\tau$加到$\mathbf{H}_k$中和变量$\mA_i$对应的对角线上。$\tau$被迭代更新$\tau_{l+1} = \min(10^{10}, 10 \tau_{l}), \tau_0 = 10^{-6}$，直到修改的Hessian矩阵正定为止。
+\end{enumerate}
+
+实际中，我们发现，与直接将$\tau_k \mathbf{I}$加到$\mathbf{H}_k$上的策略相比，我们的Hessian矩阵修改已经能显著地减少迭代次数。图~\ref{fig:hessian}展示一组比较，使用的例子是图~\ref{fig:teaser_affine}(h)。因为我们的Hessian修正策略是根据不正定的来源而专门设计的，是为我们的问题特意设计的，因此相比通用的Hessian修改策略它能够拥有一个更好的效果。
+
+\paragraph{终止条件} 当$\mEcstar$小于$10^{-12}$和$\mEc + \mu \, E_{m}$的相对变化小于$10^{-6}$时，我们算法终止。确定一个固定的控制点位置，通过求解由约束~(\ref{eqn:edge_assmebly})组成的最小二乘问题，所以组装的网格顶点位置很容易获得。对于一般的网格的输入，组装网格顶点的时候，因为我们设定的$\mEcstar$ 阈值非常小，不会引入翻转的单元、很大的映射形变。
+
+\paragraph{加速} 当网格单元的数目很大时，牛顿法的内存和时间消耗都是很大的。我们提出了一个基于子网格的优化策略，进行算法的加速。基本的想法很简单：在每次优化的时候，优化的目标只和变量的一个子集相关，也就是每次只处理一个子网格。子网格的变量数目很小，而导致优化的加速。
+
+假设存在一个初始映射：一个网格 $\mM^0$。根据所有的网格单元的形变，我们将它们塞入一个优先队列中。翻转的网格单元在队列的顶端。对于每个弹出的网格单元$\mathbf{s}$，将$\mathbf{s}$的$m$领域作为一个子网格$\mM_m$。如果$\mM_m$ 的边界包含翻转的网格单元，我们会迭代加入这些翻转的网格单元，直至在边界上没有翻转的单元或者最坏的情况出现$\mM_m = \mM^0$。对于$\partial \mM_m$中的边界顶点，并且不属于$\partial \mM^0$，我们将它们作为额外的固定控制点。通过处理这个队列，我们能得到一个子网格的集合。使用图着色方法，并行在这个子集上运行优化。这和~\cite{Fu2015}的加速算法是类似的。一个子网格上的所有网格单元的形变在形变界下的话，在这次迭代中，我们跳过它。如果一个子网格的$\mEcstar$不能趋于0，我们将它的领域扩大一倍。在下次迭代中，我们更新图着色，重新优化。初始的$m$是4。只有在极端的情况下，最坏的情况会发生，以至于子网格是$\mM^0$。
+
+\textbf{讨论2}：和\cite{Liu2008}进行比较。首先我们的想法在某种程度上是和~\cite{Liu2008}类似，都是先将网格分离，然后组装起来。但是~\cite{Liu2008}重复分离网格单元(局部步骤)和回复网格顶点位置(全部步骤)。在全局步骤，通过最小二乘来组装网格的过程，不能保证网格单元没有翻转的。我们只组装网格单元一次，同时我们的优化(网格组装)能够保证仿射变换是相容的，无翻转的放射变换。
+
+\section{和可积场的关系} \label{sec:field}
+线性变换矩阵$\mA$的行向量可以被认为是一个离散的$d$维场($d$维向量)。在一个关联上分段仿射变换的网格$\mM$上，通过仿射变换可以得到所有的标架，于是形成一个离散标架场$\Phi$。如果约束(\ref{eqn:edge_assmebly})被满足，$\Phi$ 沿着$\mM$的边是\emph{无旋的}。$\Phi$被称为\emph{可积场}~\cite{Diamanti2015}。我们的结论是在一个网格上计算一个无翻转的映射等同于设计一个可积场。Diamanti等展示了在网格参数化中，可积场的优势：\emph{参数化坐标函数的梯度实际上就是设计的场}。对于一个给定奇异性的场，我们的方法能够在不改变奇异性的情况下，将它优化成一个可积场。在~\ref{subsec:para}节中，我们将这个技术应用在全局无缝网格参数化中。
+
+\section{实验与比较} \label{sec:affine_results}
+我们的方法能够鲁棒地、高效地找到无翻转映射。在不同的应用(固定边界的映射、基于控制点的网格变形、平面网格和全局无缝网格参数化)上，我们和最先进方法的进行比较，展示了我们算法的优越性。我们的实验是在一个拥有英特尔3.4\,GHz CPU 和16\,GB RAM 的台式机上运行。牛顿法中的Cholesky分解是通过Eigen库~\cite{eigenweb} 实现的。在默认的设置中，我们设$K = +\infty$， $E_m = 0$， $\mu = 1000$和不使用加速策略。其中$K = +\infty$ 说明我们使用方程\ref{equ:K_infty}进行优化，和\cite{Fu2015}类似。$E_m = 0$的意思是不优化任何额外的能量。
+
+\paragraph{质量度量}
+使用和第\ref{chap:AMIPS}章中的\ref{sec:AMIPS_results}节类似的质量度量，对映射的质量进行评价。对于每个网格单元$\ms_j$，刚性形变度量定义为：$\delta^{iso}_{\ms_j}:= \max \{\sigma_{j,1}, 1/\sigma_{j,1},\ldots, \sigma_{j,d}, 1/\sigma_{j,d}\}$，其中$\sigma_{j,k}, k=1,\ldots,d$是$\mA_{j}$ 的奇异值。最大奇异值与最小奇异值的比值$\delta^{con}_{\ms_j}:= \max\{\sigma_{j,1},\ldots,\sigma_{j,d}\} / \min\{\sigma_{j,1},\ldots,\sigma_{j,d}\}$ 是共形形变度量。使用映射前后的面积(体积)的比值来定义体积形变度量$\delta^{vol}_{\ms_j} := \max\{\det(\mA_{j}), \det(\mA_{j})^{-1}\}$。
+
+形变的定义$d^c$， $d^{vol}$，$d^{iso}$和上面的质量度量是紧紧联系在一起的。从不等式$ 2 \, d^c_{max} \geq (\delta^{con}_{max} + 1/\delta^{con}_{max})$ 可以看出，如果$d^c$被界定，$\delta^{con}$也会有一个上界。对于体积形变，类似的结论同样存在。同时加界的$\delta^{con}$和$\delta^{vol}$同样限定了$\delta^{iso}$的值，这就是为什么我们使用方程\ref{equ:iso_bound}来控制刚性度量。所以我们的形变有界的约束是合理的。
+
+\paragraph{组装网格的变种}
+\emph{网格单元的组装} (SA)的概念导出了两个目标函数：(\ref{eqn:obj})和(\ref{eqn:objnew})。(\ref{eqn:objnew})的好处是明显的：变量的数目被显著地减少。目标函数(\ref{eqn:obj})也能通过牛顿法进行最优化，尽管收敛速率比较慢。这两个方法被命名为\emph{消元网格单元的组装} (R-SA)和\emph{全变量网格单元的组装} (F-SA)。
+
+注意仿射变换可以被网格单元的顶点位置线性决定：
+\begin{align}
+%\begin{split}
+\mA_i &= \left(\mv_{i,0}-\mv_{i,1} | \cdots | \mv_{i,0}-\mv_{i,d}\right)\left(\mv^0_{i,0}-\mv^0_{i,1} | \cdots | \mv^0_{i,0}-\mv^0_{i,d}\right)^{-1} \\
+\mT_i &= \mv_{i,0} - \mA_i \mv^0_{i,0}.
+%\end{split}
+\end{align}
+其中$\triangle \mv^0_{i,0}\cdots\mv^0_{i,d}$是原始网格上的网格单元，$\triangle \mv_{i,0}\cdots\mv_{i,d}$是它们在映射下的象。通过将所有的网格单元分离，并且将所有网格单元的顶点位置作为变量，我们能够使用顶点位置表示(\ref{eqn:obj})和(\ref{eqn:objnew})。但是变量的数目是$(d^2+d)N$，同时很难通过我们的方法进行变量消元。这个方法被命名为\emph{顶点变量网格单元的组装}(V-SA)。
+
+\begin{figure}
+  \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/R_F_V_cropped}
+    \put(8,-3){\textbf(a)}
+    \put(28,-3){\textbf(b)}
+    \put(48,-3){\textbf(c)}
+    \put(68,-3){\textbf(d)}
+    \put(88,-3){\textbf(e)}
+    \end{overpic}
+    }
+    \vspace{2mm}
+  \caption{(a) 原始网格和控制点轨迹。 (b) 通过求解拉普拉斯光滑问题，得到初始映射； (c) R-SA的结果； (d) F-SA的结果； (e) V-SA的结果。这里我们设$K_{\textrm{conf}} = +\infty$， $E_m = 0$。}
+  \label{fig:variants}
+  \vspace{-2mm}
+\end{figure}
+
+\begin{figure}
+   \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/diff_init}
+    \put(10,-3){\textbf(a)}
+    \put(35,-3){\textbf(b)}
+    \put(61,-3){\textbf(c)}
+    \put(86,-3){\textbf(d)}
+    \end{overpic}
+    }
+  \vspace{3mm}
+  \caption{ 不同的初始化(上面一行)和他们对应的结果(下面一行)。 (a) 单位矩阵变换； (b) 最近相似变换\cite{Liu2008}； (c)投影到有界形变空间\cite{Kovalsky2015}； (d) 将随机仿射变换投影到离它们最近的旋转变换。}
+  \label{fig:diff_init}
+  \vspace{-2mm}
+\end{figure}
+
+在二维网格变形问题上，我们对这些方法(R-SA，F-SA，V-SA)进行了比较。初始的映射是通过求解一个拉普拉斯能量获得的，初始的仿射变换被投影到最近的相似变换，如图~\ref{fig:diff_init}(b)所示。图~\ref{fig:variants}列出了这些方法的结果。R-SA 只需要4个$\mT_i$，因此变量数大大的减少。R-SA只使用69次迭代(0.29秒)收敛，但是F-SA使用了78次迭代(0.52秒)，V-SA使用232次迭代(0.77秒)。在我们的文章中，我们使用R-SA作为默认的方法。
+
+\paragraph{针对不同初始化的鲁棒性。}
+我们的方法对于不同的初始变换比较鲁棒。我们使用前面的例子进行验证。初始化是(1) $\mA_i = \mathbf{I}, \forall i$；(2)最近的相似变换~\cite{Liu2008}；(3)使用形变界$\delta^{con}_{bound}=10$将映射进行投影到界内~\cite{Kovalsky2015}；(4)随机仿射变换(矩阵的元素是在$[0,1]$中随机选择)，然后投影到最近的旋转变换上。图~\ref{fig:diff_init}展示了四个不同的初始状态。从(a)到(d)，优化的迭代次数与时间分别是(45， 0.17秒)， (69， 0.29 秒)， (8 3， 0.30秒)和(59， 0.18 秒)。我们发现收敛速度和初始映射的关系不大，并且我们的算法都能收敛。
+
+\paragraph{参数的敏感性}
+\begin{figure}[t]
+    \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/amips_s_cropped}
+    \put(10,-4){\textbf(a)}
+    \put(36,-4){\textbf(b)}
+    \put(61,-4){\textbf(c)}
+    \put(87,-4){\textbf(d)}
+    \end{overpic}
+    }
+    \vspace{4mm}
+  \caption{ 在第\ref{chap:AMIPS}章中，对于刚性参数化，AMIPS使用默认参数的失败例子。(a)是AMIPS的失败例子，使用参数$s = 4$。(b)，(c)，(d)是我们的结果，使用不同的参数$s = 1, 4, 8$。 它们最大和平均刚性形变分别是(8.53, 2.74)， (5.99, 2.78)， (5.18, 2.86)。 }
+  \label{fig:amips_fails_isopara}
+  \vspace{-3mm}
+\end{figure}
+我们的$E_\mathrm{C}$和AMIPS能量函数是类似的。在第\ref{chap:AMIPS}章中我们展示了当初始映射有极端形变时，AMIPS算法对指数函数中的参数$s$是非常敏感的。我们现在的方法没有遇到这些问题，因为通过投影，初始映射拥有很低的形变。图~\ref{fig:amips_fails_isopara}(a)是AMIPS算法失败的情况(一个手模型的刚性参数化)。我们使用同样的Tutte映射作为初始，在使用同样的$s$值的情况下，我们的算法在21次迭代后收敛，如图~\ref{fig:amips_fails_isopara}(c)所示。在图~\ref{fig:amips_fails_isopara}(b)中的例子我们只需要16次迭代，图~\ref{fig:amips_fails_isopara}(d)使用了46次迭代。
+
+\paragraph{最优形变界}
+\begin{figure}[t]
+    \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/eqc_cropped}
+    \put(14,-1){\textbf{Fandisk}}
+    \put(17, 39){\textbf{Isis}}
+    \put(38,-1){\textbf(1.68,1.053,2.15s)}
+    \put(38, 41){\textbf(4.39,1.090,1.00s)}
+    \put(71,-1){\textbf(1.68,1.047,45.6s)}
+    \put(71, 41){\textbf(4.39,1.139,20.9s)}
+    \put(45, 83){Ours}
+    \put(74, 83){\protect\cite{Lipman2012}}
+    \end{overpic}
+    }
+  \vspace{1mm}
+  \caption{最优共形形变界。我们在Isis和Fandisk模型上测试。文字代表了最大，平均共形形变$\delta^{con}$和运行时间。 我们使用了作者的实现\cite{Lipman2012}，并且使用了他们的默认参数来寻找最优形变界。}
+  \label{fig:eqc}
+  \vspace{-5mm}
+\end{figure}
+
+在实际应用中，和~\cite{Lipman2012,Kovalsky2014}展示的一样，给形变设定一个低形变界经常能获得很高质量的映射。Kovalsky等提出了一个优化策略，对于下个优化的迭代，使用当前的最大形变作为界。这个策略被集成在~\cite{Lipman2012}的实现中。在我们的实现中，我们同样使用他们的策略寻找最优的界。设初始的$K = +\infty$，计算一个映射。然后映射的最大形变作为$K$，重复优化直到没有任何的提高。我们和Lipman的方法在Isis和Fandisk模型上进行共形参数化比较。发现我们的方法能获得和他们类似的共形形变界，如图~\ref{fig:eqc}所示。我们的方法分别运行了5和10轮，并且比他们方法的效率高。
+
+\subsection{固定边界的映射}\label{subsec:fixed}
+\paragraph{二维固定边映射}
+\begin{figure}[t]
+\centerline{
+\scriptsize
+    \begin{overpic}[width=1\linewidth]{affine/teaser_cropped}
+    \put(2,18.3){\textbf(a) 原始网格}
+    \put(22,18.3){\textbf(b) 调和映射}
+    \put(30,26){ 28个翻转}
+    \put(45,18.3){\textbf(c)~\cite{Levi2014}}
+    \put(50,26){ 38个翻转}
+    \put(65,18.3){\textbf(d)~\cite{Xu2011}}
+    \put(70,26){ 2个翻转}
+    \put(85,18.3){\textbf(e)~\cite{Weber2012}}
+    \put(91,26){ 2个翻转}
+    \put(3.5,-2.5){颜色板}
+    \put(23,-1){\textbf(f)~\cite{Weber2014}}
+    \put(32,15){\tiny $\delta^{con}_{max}=89.15$}
+    \put(32,13){\tiny $\delta^{con}_{avg}=5.51$}
+    \put(45,-1){\textbf(g)~\cite{Lipman2012}}
+    \put(52,15){\tiny $\delta^{con}_{max}=11.00$}
+    \put(52,13){\tiny $\delta^{con}_{avg}=4.77$}
+    \put(60,-1){\textbf(h) 我们的方法(没有界)}
+    \put(72,15){\tiny $\delta^{con}_{max}=8.68$}
+    \put(72,13){\tiny $\delta^{con}_{avg}=5.01$}
+    \put(80,-1){\textbf(i) 我们的方法($K_{\textrm{conf}} = 4$)}
+    \put(93,15){\tiny $\delta^{con}_{max}=7.73$}
+    \put(93,13){\tiny $\delta^{con}_{avg}=6.08$}
+    \end{overpic}
+    }
+    \vspace{1mm}
+\caption{二维固定边界映射。一个方形的三角形网格(a)被映射到一个非凸的多边形区域上。 一个调和映射(b)存在28个翻转(使用黄色着色)。 使用这个槽糕的映射作为初始映射，我们的方法能很容易地获得无翻转的，低形变的结果(h)，形变界为$K_{\textrm{conf}} = 4$的结果(i)。我们将我们的算法和最先进的方法进行了比较。\cite{Levi2014}(c)，\cite{Xu2011}(d)和\cite{Weber2012}(e)的方法不能防止三角形的翻转。\cite{Weber2014}的方法需要在三角化中插入9个额外的点，来保证没有翻转的三角形(f)。像\cite{Lipman2012}一样的形变有界的算法能找到一个有效的映射(g)，但是形变的界是很难决定的。当$\delta^{con}_{bound} < 11$时，它会失败(使用作者的实现，默认的参数)。三角形上的颜色编码了共形形变，白色为最优。
+}
+ \label{fig:teaser_affine}
+ \vspace{-3mm}
+\end{figure}
+
+\begin{figure}[!h]
+    \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/sharp_cropped}
+    \put(14,35){\textbf(a)}
+    \put(50,35){\textbf(b)}
+    \put(86,35){\textbf(c)}
+    \put(14,-2.5){\textbf(d)}
+    \put(50,-2.5){\textbf(e)}
+    \put(86,-2.5){\textbf(f)}
+    \end{overpic}
+    }
+  \vspace{2mm}
+  \caption{二维固定边界映射比较。 (a)输入。 (b)\cite{Xu2011}的结果，拥有150个翻转。(c) \cite{Weber2012}的结果，有162个翻转。 (d)\cite{Weber2014}的极限映射，插入4个额外的点。 (e) \cite{Lipman2012}的结果，形变界为12。 (f) 使用\cite{Xu2011}的结果作为初始，我们的算法结果。三角形着色的编码方式是和图~\ref{fig:teaser_affine}一样的。}
+  \label{fig:sharp}
+  \vspace{-6mm}
+\end{figure}
+
+图~\ref{fig:teaser_affine}展示了在同一个二维共形固定边界映射例子上使用不同方法的比较。只有我们的方法和形变有界的方法~\cite{Lipman2012}能够在没有加新点的基础上，找到有效的结果。 在图~\ref{fig:disassembly}中，我们展示了我们方法的中间结果。为了更好地绘制中间结果，我们在图~\ref{fig:disassembly}中使用F-SA，使得所有的平移向量在每次迭代中都可以被决定。
+
+图~\ref{fig:sharp}展示了另外一个例子。~\cite{Weber2012,Xu2011}的方法没有生成有效的结果。为了避免翻转，~\cite{Weber2014}的方法插入了4个额外顶点。从形变的颜色编码上看，我们的方法在2.40秒内产生一个低形变、无翻转的映射。使用\cite{Xu2011}作为初始映射，并将它投影到最近的相似变换上作为我们算法的仿射变换初始值。我们的方法、~\cite{Weber2014}、~\cite{Lipman2012}的最大、平均的共形形变分别是(7.31, 3.69)， (31.35, 4.22)， (12.00, 4.29)。 当$\delta^{con}_{bound}$ 小于12 时，形变有界的映射方法~\cite{Lipman2012}(作者的实现)会失败。
+
+\paragraph{多立方体映射}
+\begin{figure}[t]
+    \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/polycube_cropped}
+    \put(12,-2.5){\textbf(e)}
+    \put(12,34){\textbf(c)}
+    \put(12,67){\textbf(a)}
+    \put(60,-2.5){\textbf(f)}
+    \put(60,34){\textbf(d)}
+    \put(60,67){\textbf(b)}
+    \end{overpic}
+    }
+  \vspace{2mm}
+  \caption{使用我们的算法，应用到共形多立方体网格映射上。左下角的小图代表初始的映射，黄色的是翻转的四面体。边界的四面体使用$\delta^{con}$进行颜色编码。 }
+  \label{fig:polycube}
+  \vspace{-3mm}
+\end{figure}
+
+\begin{table}[]
+\caption{多立方体映射的统计与时间。}
+\centering \scalebox{1.0}{
+\begin{tabular}{lrrr}
+\toprule
+模型         & \#顶点/\#四面体  & $\delta^{con}_{max}/\delta^{con}_{avg}/\delta^{con}_{dev}$       &时间 (s) \\
+\midrule
+图 \ref{fig:polycube}(a)-Kovalsky2015     & 9867/40076 &  $\delta^{con}_{bound} = 6$  & 3.81 \\
+图 \ref{fig:polycube}(a)-Our     & 9867/40076 &  5.63/1.96/0.53  & 3.51 \\
+\midrule
+图 \ref{fig:polycube}(b)-Kovalsky2015     & 2464/12601 &   $\delta^{con}_{bound} = 4$ & 2.21 \\
+图 \ref{fig:polycube}(b)-Our     & 2464/12601 &   3.81/2.56/0.50 & 1.42 \\
+\midrule
+图 \ref{fig:polycube}(c)-Kovalsky2015     & 12428/60301 &   $\delta^{con}_{bound} = 20$ & 22.09 \\
+图 \ref{fig:polycube}(c)-Our     & 12428/60301 &   6.22/3.52/1.05 & 9.40 \\
+\midrule
+图 \ref{fig:polycube}(d)-Kovalsky2015     & 10790/45422 &  $\delta^{con}_{bound} = 8$ & 4.73 \\
+图 \ref{fig:polycube}(d)-Our     & 10790/45422 &  5.63/2.21/0.57 & 4.57 \\
+\midrule
+图 \ref{fig:polycube}(e)-Kovalsky2015     & 8366/40627 &  $\delta^{con}_{bound} = 20$  & 11.29 \\
+图 \ref{fig:polycube}(e)-Our     & 8366/40627 &  7.67/3.53/0.93  & 5.79 \\
+\midrule
+图 \ref{fig:polycube}(f)-Kovalsky2015     & 10528/43371 &  $\delta^{con}_{bound} = 10$  & 4.27 \\
+图 \ref{fig:polycube}(f)-Our     & 10528/43371 &  5.91/2.14/0.70  & 4.90 \\
+\bottomrule
+\end{tabular}}
+\label{table:polycube_stat}
+\vspace{-3mm}
+\end{table}
+
+对于多立方体映射，我们寻找最优共形形变界。初始映射来自\cite{Aigerman2013}，已经给定了多立方体结构的边界位置约束。我们允许边界顶点在对应的平面或者边上移动。这个移动被作为一个线性约束，并且他们的平方和被加入到$\mEcstar$ 中。图~\ref{fig:polycube} 展示了我们的算法应用到六个模型上的结果。表~\ref{table:polycube_stat}收集了形变度量的统计值和运行时间。在这个应用中，我们使用了我们的加速策略。和\cite{Kovalsky2015}相比，我们结果的质量更好并且计算速度相当的。
+
+\subsection{网格变形}\label{subsec:handle}
+\begin{figure}[t]
+    \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/amips_fail_crop}
+    \put(15,-2.5){\textbf(a)}
+    \put(42,-2.5){\textbf(b)}
+    \put(75,-2.5){\textbf(c)}
+    \end{overpic}
+    }
+    \vspace{2mm}
+  \caption{ 网格变形。 (a) 是原始网格。 (b)是AMIPS的失败结果。 我们的结果展示在(c)中。}
+  \label{fig:amips_fails}
+  \vspace{-3mm}
+\end{figure}
+图~\ref{fig:amips_fails}展示了一个四面体网格刚性变形的例子。一只猩猩的手掌被摁倒地板上，手上的顶点是控制点。AMIPS方法无法生成无翻转的变形，原因是由于控制点轨迹的冲突导致子步长策略失败，如图~\ref{fig:amips_fails}(b)所示。
+我们的方法从ARAP的结果(存在翻转的四面体)出发。我们设定$E_m = \sum_i \|\mA_i - \mA_i^0\|_F^2$来近似初始的ARAP映射。同时，我们在共形形变与体积形变上寻找最优的界。我们只需要1.05秒就获得一个有着较低的最大共形形变与体积形变的无翻转映射($\delta^{con}_{max} = 3.55$和 $\delta^{vol}_{max}= 4.34$)。在最后的结果上，$E_m = 250.05$，每个四面体上的平均值为$0.012$。在这个例子上，我们使用了加速策略。
+
+\begin{figure}[t]
+    \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/bar_cropped}
+    \put(14,-2.5){Bend}
+    \put(45,-2.5){Twist}
+    \put(82,-2.5){Move}
+    \end{overpic}
+    }
+  \vspace{2mm}
+  \caption{ 掰弯，扭，平移一个棒。初始映射的结果(第一行)来自于\cite{Aigerman2013}，并且包含一些翻转的四面体。 第二行展示了我们的算法能够生成无翻转的，低形变的结果。 颜色的编码和图~\ref{fig:amips_fails}是一样的。}
+  \label{fig:bar}
+  \vspace{-3mm}
+\end{figure}
+
+图~\ref{fig:bar} 展示了三个在棒模型上的刚性变形的例子。$E_m = \sum_i \|\mA_i - \mA_i^0\|_F^2$被加入到我们的能量中，用来近似输入的映射。最大和平均刚性形变分别是(5.42, 1.30)， (5.22, 1.45)， (4.55, 1.21)。 $E_m$ 分别为257.64， 256.43， 67.21。我们方法的速度(使用加速策略)和最快的形变有界方法~\cite{Kovalsky2015}是相当的，(0.68, 0.58, 0.60秒) vs. (1.01, 0.71, 0.85秒)。
+
+\subsection{网格参数化}\label{subsec:para}
+\paragraph{平面参数化}
+\begin{figure}[t]
+    \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/bunny_cropped}
+    \put(15,-3.5){\textbf(a)}
+    \put(49,-3.5){\textbf(b)}
+    \put(83,-3.5){\textbf(c)}
+    \end{overpic}
+    }
+    \vspace{3mm}
+  \caption{Bunny模型的共形参数化(1251046个顶点)。 (a) 我们的结果。 (b)和(c)是我们AMIPS方法的结果，初始化分别来自圆盘凸映射和LABF\cite{Zayer2007}的结果。 }
+  \label{fig:lscm}
+  \vspace{-1mm}
+\end{figure}
+
+图~\ref{fig:lscm}展示了Bunny模型(1.25M个顶点，2.5M面)上的共形参数化的结果。我们使用LSCM~\cite{Levy2002}的结果(存在翻转)作为初始化映射，在我们的优化中，设$E_{m} = \textrm{LSCM}$，$K_{conf} = 1.45$(和$\delta^{con}_{bound} = 2.5$一样的)。我们基于加速策略的方法使用了10.2秒， 而Tutte映射和LABF~\cite{Zayer2007}出发，AMIPS方法分别使用了2小时和2分钟。我们算法(图~\ref{fig:lscm}(a))，AMIPS方法(图~\ref{fig:lscm}(b)(c))的最大、平均共形形变分别是(2.44, 1.004)， (2.29, 1.006)和(2.25, 1.003)。
+
+注意到初始化的LSCM映射只有24个三角形违反设定的形变界或者是翻转的。在我们的加速优化过程中，只有11个子网格出现，每个子网格最多拥有32个三角形。因此我们的优化非常快，只使用了0.075秒。最后的顶点恢复花费了10秒。我们尝试了\cite{Kovalsky2015}的程序，它花费了将近2.5分钟才收敛。
+
+我们也进行了一个压力测试，将初始化的LSCM结果随机扰动，产生了226972个翻转的三角形。我们的方法使用了5.5分钟来收敛，但是\cite{Kovalsky2015}从这个差的初始映射出发，没有收敛到一个可行解上。
+
+\paragraph{全局无缝参数化}
+\begin{figure}[t]
+ \centerline{
+    \begin{overpic}[width=1\linewidth]{affine/gsp_cropped}
+    \put(1, 58){\tiny \cite{Diamanti2015}}
+    \put(1, 56){\tiny \#奇异点: 729}
+    \put(1, 54){\tiny 最大旋度: $7.8\times10^{-2}$}
+    \put(1, 52){\tiny 平均旋度: $1.3\times10^{-5}$}
+    \put(26, 58){\tiny 我们的结果}
+    \put(26, 56){\tiny \#奇异点: 342}
+    \put(26, 54){\tiny 最大旋度: $7.6\times10^{-26}$}
+    \put(26, 52){\tiny 平均旋度: $3.7\times10^{-28}$}
+    \put(47, 46){\tiny \cite{Diamanti2015}}
+    \put(47, 44){\tiny \#奇异点: 425}
+    \put(47, 42){\tiny 最大旋度: $1.8\times10^{-1}$}
+    \put(47, 40){\tiny 平均旋度: $2.5\times10^{-5}$}
+    \put(46, 14){\tiny 我们的结果}
+    \put(46, 12){\tiny \#奇异点: 242}
+    \put(46, 10){\tiny 最大旋度: $2.2\times10^{-24}$}
+    \put(46, 8){\tiny 平均旋度: $9.6\times10^{-27}$}
+    \end{overpic}
+    }
+  \caption{ 全局无缝参数化。 与\cite{Diamanti2015}相比，我们维持了原来的奇异性，并且拥有更小的边旋度值。 }
+  \label{fig:gsp}
+  \vspace{-3mm}
+\end{figure}
+
+对于标架场驱动的网格参数化，标架场的不可积性是产生参数化中出现翻转的根本原因。对于网格上的一个给定的输入标架场$\phi$，我们寻找一个新的标架场$\phi^\star$，它尽可能的和$\phi$接近、可积的、维持奇异性不变。计算是很简单的：(1)在每个面上，建立了一个局部标架系统，并且将每个标架$\phi^\star_i$作为一个二维线性变换矩阵$\mA_i$；(2)我们在网格的每条边$\me$上，强加如下的约束：
+\begin{equation}\label{eqn:ivf}
+\mA_{l} \,\me_l = \mathbf{R}_e\, \mA_{r} \,\me_r
+\end{equation}
+$\mA_{l}$和$\mA_{r}$是定义在边$\me$两个相邻面上的。$\me_l$和$\me_r$是$\me$的二维边向量，这是在它们对应的局部坐标系统中计算的。$\mathbf{R}_e$是定义在$\me$上的旋转矩阵，因为我们没有改变标架场的奇异性，所以它是固定的。$ \|\mA_{l} \,\me_l - \mathbf{R}_e\, \mA_{r} \,\me_r\|^2$测量了定义在边$\me$上的边旋度的平方。约束\ref{eqn:ivf}的平方和形成了$\mEa$，我们使用网格单元组装方法来寻找$\phi^\star$。$E_m = \|\phi^\star-\phi\|^2$，用来最小化和原始场的距离。网格参数化可以通过求解泊松方法，来获得定义在网格顶点上的两个分段线性标量函数，它们的梯度是和标架场对齐的~\cite{Diamanti2015}。
+
+我们在数据集~\cite{Myles2014,Diamanti2015} (114个模型)上测试了我们的算法，其中有80个模型的初始化参数化结果(初始化标架场)存在翻转。对于其中的73个模型，我们的算法成功地求得可积场，其中最大的边旋度值小于$10^{-18}$。对于剩下的7个模型，最大和平均边旋度值是在$10^{-7}$和$10^{-11}$左右。通过求解泊松方程，对于剩余的7个模型，我们能生成无翻转的参数化结果。但是，尽管缝在视觉上是不可见的，但是这些结果不是真的无缝。如果我们将这些硬约束(\ref{eqn:ivf})加入到泊松方程中，这7个模型的参数化结果中出现了一些翻转。通过观察，我们发现这7个模型存在一些又长又细的尖刺，如图\ref{fig:mesh_spike}所示，这些地方的输入场是不光滑的。如果将这些区域的顶点进行几步局部拉普拉斯光滑，并且将场投影回修改的面上，我们的方法能够成功得找到可积场。这些试验中平均的计算时间大概是15秒（使用加速策略）。
+
+\begin{figure}[t]
+    \centerline{
+    \begin{overpic}[width=0.52\linewidth]{affine/mesh_spike}
+    \end{overpic}
+    }
+    \vspace{3mm}
+  \caption{模型上存在一些又长又细的尖刺。 }
+  \label{fig:mesh_spike}
+  \vspace{-3mm}
+\end{figure}
+
+\paragraph{比较}
+Myles等\cite{Myles2014}报告了~\cite{Lipman2012}的方法在20个模型上失败了，当共形形变为$\delta^{con}_{bound} = 199$。Diamanti等\cite{Diamanti2015} 提出了PolyVector技术来计算可积场。当泊松方程的平均的残差小于$10^{-3}$时，他们停止优化。因此，他们的标架场不是真正的可积，因为边旋度的值很高。他们的参数化结果视觉上是无缝的，但是奇异点的数目远远大于原始的场的奇异点数目。图~\ref{fig:gsp}对比了我们的算法和~\cite{Diamanti2015}。我们的方法能够维持输入标架场的奇异性，所以它更加适合在不改变用户设计的标架场前提下的参数化。但是和他们的工作类似，我们的方法不能用来生成无缝的四边形网格，因为没有考虑取整的问题。
+
+\section{本章小结}
+我们新颖的网格单元组装算法提供了一个鲁棒和高效的方式，用来计算无翻转的映射。通过很多应用和具有挑战的例子，证明了我们算法的优点。%现在存在的保证无翻转的技术能够从我们的方法中获得好处。
+我们算法的出发点\emph{分离+组装}使得实现很简单。我们的算法同样能够被推广到计算可积场上。
+
+\paragraph{收敛性。} 因为我们的目标函数是非线性的，所以我们没有任何理论的保证，使算法一直收敛到$\mEa = 0$。比如在计算可积场的过程中，我们发现了一些失败的例子。 对于给定约束的计算映射的问题，存在性没有任何的理论保证。%所以我们的算法同样不能保证最终一定收敛。
+
+\paragraph{效率。} 和~\cite{Kovalsky2015}的方法比较，我们的方法存在一个局限性： Hessian矩阵不能进行预分解，用来加速。但是依靠我们的加速策略，我们能够获得和~\cite{Kovalsky2015}相当或者更好的效率，比如多立方体映射的例子，如图~\ref{fig:polycube}和表\ref{table:polycube_stat})所示。在未来，我们希望开发更高效的算法。
+
+
