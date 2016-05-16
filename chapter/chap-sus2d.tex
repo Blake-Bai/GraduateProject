@@ -2,15 +2,74 @@
 固定网格的连接关系以及一些点位置的约束，网格优化技术通过移动自由点的位置最优化某种网格质量的度量。网格质量的度量与需求有关，(ref intro-meshquality)定义了几种合理的度量。本章基于(ref sus2d)的方法，把得到无翻转网格和提高网格质量合并为一个优化过程。通过改变非拐角点的位置，就可以快速地得到无翻转且高质量的网格。
 
 \section{目标函数设计}\label{sec:objectives}
-为了得到均匀且正交性良好的四边形网格，\ref{sec:sus}节采用了(ref sus2d)中可以同时惩罚翻转单元和低质量单元的目标函数，\ref{sec:vertical}节设计了以直角为目标的网格度量。
+设待优化的网格目标顶点的位置坐标记为$\mvar$,网格的边集为$\medgeset={\medge_1,\medge_2,...\medge_N}$,考查的三角形为$\mT={t_1,t_2,...t_M}$。对于四边形网格，我们先按(ref quality)所述把每个四边形分成四个三角形。
+为了提高网格质量，\ref{sec:sus}节采用了(ref sus2d)中可以同时惩罚翻转单元和低质量单元的目标函数，\ref{sec:vertical}节设计了针对四边形网格的以直角为目标的网格度量。
 \subsection{同时解决翻转网格和提高网格质量的度量}\label{sec:sus}
-我们在(ref intro-meshquality)中定义的度量虽然能表达一个有效网格的质量，但无法处理有翻转三角形或四边形的网格。这是因为它们无法连续地定义在整个$\mR_2$空间上，特别地，当某个三角形或四边形连续地从一个定向变为退化再变为另一个定向时(ref intro-inverted)，这些度量函数的变化是不连续的。因此，许多网格优化的技术都需要为此定义不同的目标函数，先得到无翻转的网格，再提高网格质量，而这种方法无疑需要较多的迭代次数并且很容易收敛到较差的局部极小值。
+我们在(ref intro-meshquality)中定义的度量虽然能表达一个有效网格的质量，但无法处理有翻转三角形的网格。这是因为它们无法连续地定义在整个$\mR^2$空间上，特别地，当某个三角形连续地从一个定向变为退化再变为另一个定向时(ref intro-inverted)，这些度量函数的变化是不连续的。因此，许多网格优化的技术都需要为此定义不同的目标函数，先得到无翻转的网格，再提高网格质量，而这种方法无疑需要较多的迭代次数并且很容易收敛到较差的局部极小值。
 
-考虑用雅可比矩阵$J$的条件数$\kappa$(condional)度量给定四边形与正方形的差距，首先将其重写为
+考虑用雅可比矩阵$J$的条件数$\kappa$(ref condional)度量给定三角形与目标三角形的差距，首先将其重写为
 \begin{equation} \label{equ:kappa}
-\kappa_m=\frac{\left|J_m\right|_F \cdot \left|J_m^{-1}\right|_F}{2}=\frac{\left|J_m\right|_F^2}{2\sqrt{|\sigma_m|}}
+\kappa=\frac{\|J\|_F \cdot \|J^{-1}\|_F}{2}=\frac{\|J\|_F^2}{2\sqrt{|\sigma|}}
 \end{equation}
-其中$m=1,2,...4n，n$为四边形的个数，$\sigma_m=det(J_m)$。显然$\kappa_m$的达到最大值1当且仅当这个三角形是等腰直角三角形，故$\kappa_m$在$\sigma_m=0$处不连续，即它不能表达退化或翻转单元的质量。
-\subsection{以直角为目标的四边形网格度量}\label{sec:vertical}
+其中$\sigma=det(J)$。显然$\kappa$达到最大值1当且仅当这个三角形是等腰目标三角形，但$\kappa$在$\sigma=0$处不连续，即它不能表达退化或翻转单元的质量。
 
-\section{优化策略} \label{sec:optimization}
+(ref sus2d)对上述度量做了改进，上式中$\sigma$被替换为一个恒正且单调递增的函数
+\begin{equation}\label{equ:h}
+h(\sigma)=\frac{1}{2}(\sigma+\sqrt{\sigma^2+4\delta^2})
+\end{equation}
+因此有$\delta=h(0)$。$h(\sigma)$和$\sigma$的函数图像见图。因此对三角形质量的度量更改为
+\begin{equation}\label{equ:kappa_star}
+\kappa^*=\frac{\|J\|_F^2}{2\sqrt{h(\sigma)}}
+\end{equation}
+由此给出目标函数
+\begin{equation} \label{equ:sus}
+E_{sus}=\left|K_{\kappa}^*\right|_p(\mvar)=\left[\sum_{m=1}^M(\kappa_m^*)^p(\mvar)\right]^{\frac{1}{p}}
+\end{equation}
+其中$\kappa_m^*$为改进的对三角形$t_m$的度量。
+
+\emph{改进目标函数的合理性}\,虽然$\kappa^*$不是$J$的条件数，但由于$\lim_{\delta \to 0}h(\sigma)=\sigma,\forall \delta \geq 0$且$\lim_{\delta \to 0}h(\sigma)=0,\forall \sigma \leq 0$，对于未翻转的网格单元，总可以选取充分小的$\delta$使得$\kappa^*$与$\kappa$任意地接近。又由于$h(\sigma)$关于$\sigma$在$\mR$上恒正且单调递增，所以目标函数可以对翻转单元做出更大的惩罚。另外，考虑到$\forall \sigma>0,\lim_{\delta \to 0}h^{'}(\sigma)=1$且$\lim_{\delta \to 0}h^{(n)}(\sigma)=0,\forall n \leq 2,$容易证明修改后的目标函数的各阶导数与原函数有类似的收敛性，故我们可以使用基于一阶导数(如梯度法)和二阶导数(如牛顿法)的方法优化这个能量。
+
+\emph{$\delta$的选取}\,在计算机实现中，$\delta$应取为在不引起任何数值计算问题的前提下的尽量小的正数。令$\gamma$是机器精度($0<\gamma \ll 1$),为了避免计算目标函数\ref{equ:sus}时计算机做除0运算，我们选取
+\begin{equation}\label{equ:delta}
+\delta \geq \delta_{\min}
+=\left\{
+	\begin{array}{cc}
+	\sqrt{\gamma(\gamma-\sigma_{min})} & \,if\, \sigma_{\min}<\gamma \\ 
+	0 & \,if\, \sigma_{\min}\geq\gamma
+	\end{array}
+	\right. 
+\end{equation}
+其中$\sigma_{min}=\mathop{\min_{m=1,...,M}(\sigma_m)}$。由于$h(\cdot)$的单调性，总有$h(\sigma) \geq h(\sigma_{min}) \geq \gamma$，由上式也可以看出若网格无翻转或退化单元，则$\delta$可取为0，此时$h(\sigma)=\sigma$，式\ref{equ:sus}即为原始的目标函数(ref quality)。
+
+总之，通过选取小的$\delta$使用改进的目标函数\ref{equ:sus}，我们可以同时解决网格的翻转单元并提高网格的质量。
+\subsection{以直角为目标的四边形网格度量}\label{sec:vertical}
+(ref intro)指出，四边形网格的角度往往被作为最直接的质量度量，因此在保证网格无翻转单元的基础上，我们再显式地加入
+\begin{equation} \label{equ:vertical}
+E_{ver}(\mvar)=\sum_{\theta} \cos ^2(\theta)
+=
+\sum_{(\medge_i,\medge_j)}\left(\frac{\medge_i\cdot \medge_j}{\left\|\medge_i\right\|\cdot\left\|\medge_j \right\|}\right)^2
+\end{equation}
+其中$\theta$遍历四边形网格的所有角，$(\medge_i,\medge_j)$遍历组成角的两条边的向量。对于无翻转单元的四边形网格，$0<\theta<\pi,\forall \theta$。$\theta$越接近直角，$E_{ver}$越小。此能量不能处理含有翻转单元的情况。
+\section{网格优化算法} \label{sec:optimization}
+本文有两处需要优化网格的质量。\ref{sus-poly}节对\ref{sec:flattening}节对压平的多正多边形结构网格进行优化，\ref{sec:sus-ver-quad}节对\ref{sec:quad-meshing}节解整数规划问题后产生的初始四边形网格进行优化。
+\subsection{多正多边形结构三角网格的优化} \label{sec:sus-poly}
+由于\ref{sec:flattening}节压平网格时可能在边界处产生较差的网格，我们以正三角形为每个网格三角形的目标三角形,$W$取为——————。并给出式\ref{equ:kappa_star}的梯度：
+\begin{equation}
+\partial_\alpha \kappa^*=2\kappa^*
+\left[
+\frac{(\partial_\alpha J,J)}{\left\|J\right\|_F^2}
+-\frac{\partial_\alpha \sigma}{4\sqrt{\sigma^2+4\delta^2}}
+\right]
+\end{equation}
+其中$(\partial_\alpha J,J)=tr(\partial_\alpha J^TJ),\alpha=x,y$为点的横、纵坐标。
+
+\emph{优化策略}\,为了保持多正多边形的结构，我们固定拐角点的位置，并把边界非拐角点约束在边界上。我们使用梯度下降法优化能量$E_{sus}$，每次局部地移动一个点，而固定其它点，使用线回溯搜索的方法确定步长，当前点的局部能量一旦下降，就转而优化下一个点。对于内部点，移动方向即为其梯度方向，对于边界非拐角点，把梯度方向在边界方向上的投影作为移动方向。算法终止的条件是所有点沿着目标方向的移动都不能使能量减小。
+
+\emph{讨论}\, 如果以所有点的坐标为变量，整体地优化$E_{sus}$，则使能量下降的方向尤为重要。由于所有的点会同时移动，若任何点的子方向很差，则会导致整体的能量下降缓慢。若使用二阶的方法确定移动方向，则需要求解大规模的线性方程组，且会受到海森矩阵性态的影响，若使用全局的梯度作为近似的下降方向，会导致能量收敛性较差。局部地优化网格时我们不需要求解精确的下降方向，只需简单地用梯度方向近似并搜索出合适的步长。
+\subsection{四边形网格的优化}\label{sec:sus-ver-quad}
+我们把网格的每个四边形分成四个三角形，然后以等腰直角三角形为目标三角形，此时$W$为单位阵。结合式\ref{equ:sus}和\ref{equ:vertical},得到总的目标函数
+\begin{equation} \label{equ:quadopt}
+E_{quad}=E_{sus}+\lambda E_{ver}
+\end{equation}
+其中$\lambda$控制以直角为目标的能量所占比重。由于以等腰直角三角形为目标，取$\lambda=0$也能得到较好的角度。若初始网格含有翻转单元，我们先令$\lambda=0$，采用上节所述的优化策略，一旦得到有效的网格，就把$\lambda$取为非0值继续优化，移动后的点除了满足能量下降外还要满足当前的网格无翻转单元。我们给出如下的算法：
+
