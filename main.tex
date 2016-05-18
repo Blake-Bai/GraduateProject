@@ -21,8 +21,8 @@
 
 %% abbr. definitions
 \def \mM {\mathbf{M}}%input mesh
-\def \mQ {{\mathbf{Q}}}
-\def \mp {{\mathbf{p}}}
+\def \mQ {\mathbf{Q}}%quad mesh
+\def \mp {{\mathbf{q}}}%quad vertex
 \def \mx {{\mathbf{x}}}
 \def \my {{\mathbf{y}}}
 
@@ -108,12 +108,12 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
   % 中文封面内容
-  \title{多正八边形辅助的2维区域四边形网格化}%一般情况下扉页和封皮、书脊共用一个标题文本，可以不用定义\spinetitle（仅硕博有用）, \covertitle （本硕博均有用）和\encovertitle （仅本科有用）。特殊情况见下。
+  \title{多正多边形辅助的2维区域四边形网格化}%一般情况下扉页和封皮、书脊共用一个标题文本，可以不用定义\spinetitle（仅硕博有用）, \covertitle （本硕博均有用）和\encovertitle （仅本科有用）。特殊情况见下。
   %\spinetitle{\small{多正八边形辅助的2维区域四边形网格化}}
   %特殊情况1：本例中\title命令里含有换行控制字符，这会导致制作书脊的时候出现错误，例如如果你注释掉\spinetitle{...}这一行就会报错。这时需要定义一个不含换行等命令的\spinetitle，这并不表示\spinetitle里不能有任何命令——只能使用有限的命令。
   %特殊情况2：本例中标题过长，所以需要缩小书脊标题的字号。
   %特殊情况3：本例中中英文混排，由于tex竖排的原理限制，中英文基线不重合，所以需要人工调整英文的基线。具体调整量根据不同字体有所不同。
-  \covertitle{多正八边形辅助的2维区域四边形网格化}
+  \covertitle{多正多边形辅助的2维区域四边形网格化}
   %\covertitle{中文题目第一行\\中文题目第二行}
   %不要在此调整封皮字体大小！ Do not set Cover Page font size here!
   %特殊情况4：本例中\title中含有多个换行，导致标题超过了两行。根据制本厂规定，封皮标题不能超过两行。因此需要定义封皮使用的标题\covertitle. 如果你注释掉这一行，就会发现封皮不符合规定。
@@ -128,7 +128,7 @@
   \major{}%专业，硕博请用全称，本科不需要
   \advisor{刘洋\ }
   %\coadvisor{王永\ 教授}%第二导师，没有请注释掉
-  \studentid{BA13010003}%For bachelor only
+  \studentid{PB12001087}%For bachelor only
   \submitdate{二〇一六年六月}
 
   % 英文封面内容
@@ -238,6 +238,7 @@
   \include{chapter/chap-intro}
   \include{chapter/chap-dfpoly}
   \include{chapter/chap-maquad}
+  \include{chapter/chap-mapback}
   \include{chapter/chap-sus2d}
  % \include{chapter/chap-intro}
   %\include{chapter/chap-related}
