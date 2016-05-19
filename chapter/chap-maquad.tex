@@ -1,6 +1,22 @@
 \chapter{基于中轴线的2维四边形网格生成}\label{chap:maquad}
 输入一个2维的边界不自交的有界区域，本章的目标是自动地在此区域上生成质量较高的四边形网格。若区域的边界是曲线，我们在边界上采点，用简单多边形逼近原边界。四边形网格生成分为两步：\ref{sec:ma_subdivion}节用(ref 2d fem mesh generation)的方法，基于区域的中轴线把它分割成充分简单、可直接产生四边形网格的子区域，\ref{sec:prime_meshing}节先把子区域分割3、4、5边形结构，再利用(ref integer programming)整数规划的方法在每个子区域上产生四边形网格，并使得子区域网格之间彼此相容。
-
+\section{中轴线的概念}\label{sec:ma}
+\begin{definition}\label{def:ma}
+考虑2维区域$A$以及它的边界$\partial A$,对任意点$P\in A$，记圆$U_r(P)$是以$P$为圆心在$A$中的最大圆。所有$U_r(P)$与$\partial A$交点至少为两个的点$P$构成的集合$M(A)$称为的\textbf{中轴线}。其中$U_r(P)$交于相同的两条边界的点P形成一条\textbf{中轴边}，中轴边的端点称为\textbf{中轴点}。
+\end{definition}
+中轴边和中轴点可被看成一个图的边和点，这个图就像$A$的骨架，代表了A的拓扑结构，因此可以作为区域分割的指导。
+%为了根据中轴线的结构把子区域归为简单区域(\ref{def:prime})的一种或对它进一步细分,
+\begin{definition} \label{medial-vertex}
+与(ref fem2d)等价地，我们把中轴点分为如下几类：%根据(ref ma),中轴点是对应不同分割的中轴线的交点，分为：
+	(1)J类：至少三条中轴边的交点;
+	
+	(2)I类：两条中轴边的交点;
+	
+	(3)C类：中轴边与区域边界的交点;
+	
+	(4)T类：拓扑冗余，中轴边的终点，与边界无交点;
+\end{definition}
+图中给出了各类中轴点的示例。(ref fem2d)通过Delaunay三角化用三角形的外心连线逼近区域的中轴线，并根据三角形的邻接关系定义了与本文对应的几类三角形。本文利用CGAL库(refCGAL)精确地计算了中轴线。 
 \section{基于中轴线的简单子区域的产生}\label{sec:ma_subdivion}
 本节复现了(ref 2d fem mesh generation)的方法，\ref{sec:cocavity-removal}先把区域分割为凸子区域的并，\ref{ma-prime}再根据凸子区域的中轴线结构进一步把它们细分为充分简单区域的并。\ref{sec:discuss}对这种方法进行了讨论。
 \subsection{分割区域去除凹角}\label{sec:cocavity-removal}
@@ -32,20 +48,6 @@ ref(2d fem)称第3类角是\emph{凹}的，即
 \end{equation}
 其中$n_i$是整数，$\theta_i$如图所示。与(ref fem2d)不同，我们加入了对另一个点$v$与其最近拐点$c$的距离的惩罚。因为这个点和附近拐点之间的边会成为至少一个四边形的边界，为了避免生成的网格过密，如果角度最优的分割点离另一个拐点很近，我们选择次优的角度，直接连接两个拐角点。  
 我们不断选取边进行分割，并更新子区域的Delaunay三角化，直到所有的子区域都没有凹角为止。
-\subsection{中轴点的分类}\label{sec:classify-mv}
-为了根据中轴线的结构把子区域归为简单区域(\ref{def:prime})的一种或对它进一步细分,与(ref fem2d)等价地，我们先把中轴点分为如下几类：
-\begin{definition} \label{medial-vertex}
-	根据(ref ma),中轴点是对应不同分割的中轴线的交点，分为：
-	
-		(1)J类：至少三条中轴线的交点;
-		
-		(2)I类：两条中轴线的交点;
-		
-		(3)C类：中轴线与区域边界的交点;
-		
-		(4)T类：拓扑冗余，中轴线的终点，与边界无焦点;
-\end{definition}
-图中给出了各类中轴点的示例。(ref fem2d)通过Delaunay三角化用三角形的外心连线逼近区域的中轴线，并根据三角形的邻接关系定义了与本文对应的几类三角形。本文利用CGAL库(refCGAL)精确地计算了中轴线。 
 \subsection{基于中轴线的区域细分}\label{ma-prime}
 给定一个所有拐点都不是凹角的2维区域，其中轴线就像该区域的"骨架"，并且很好地代表了区域的拓扑结构。根据\ref{sec:classify-mv}对中轴点的分类以及它们的连接关系，我们采取如下的一系列方法把这些子区域归结或进一步细分为简单区域(ref def simple)。
 
