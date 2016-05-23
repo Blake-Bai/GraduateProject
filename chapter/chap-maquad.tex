@@ -5,6 +5,22 @@
 考虑2维区域$A$以及它的边界$\partial A$,对任意点$P\in A$，记圆$U_r(P)$是以$P$为圆心在$A$中的最大圆。所有$U_r(P)$与$\partial A$交点至少为两个的点$P$构成的集合$M(A)$称为的\textbf{中轴线}。其中$U_r(P)$交于相同的两条边界的点P形成一条\textbf{中轴边}，中轴边的端点称为\textbf{中轴点}。
 \end{definition}
 中轴边和中轴点可被看成一个图的边和点，这个图就像$A$的骨架，代表了A的拓扑结构，因此可以作为区域分割的指导。
+\begin{figure}[t]
+	\centerline
+	{
+		\begin{overpic}[width=0.8\columnwidth]{fertility_hex_cmp}
+			\put(16,48){\textbf{test my 标注}}
+			\put(62,50){\textbf{(b)}}
+			\put(20,-3){\textbf{(c)}}
+			\put(62,-3){\textbf{(d)}}
+		\end{overpic}
+	}
+	\vspace{4mm}
+	\caption{Fertity模型上使用不同的多立方体结构构造算法生成的六面体网格。(a)，(b)，(c)，(d)分别来自\cite{Gregson2011}，~\cite{Huang2014}，~\cite{Livesu2013}，我们的方法。六面体的数目分别是19870，53702，17910，24920。缩放Jacobian行列式的最小和平均值分别为(0.196,0.911)，(0.260,0.872)，(0.312,0.911)，(0.422,0.917)。}
+	\label{fig:fertility_hex_cmp}
+	\vspace{-3mm}
+\end{figure}
+
 %为了根据中轴线的结构把子区域归为简单区域(\ref{def:prime})的一种或对它进一步细分,
 \begin{definition} \label{medial-vertex}
 与(ref fem2d)等价地，我们把中轴点分为如下几类：%根据(ref ma),中轴点是对应不同分割的中轴线的交点，分为：
