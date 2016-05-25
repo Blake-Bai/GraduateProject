@@ -1,0 +1,10 @@
+\chapter{实验与结论} \label{chap:exandcon}
+我们在各种不同的2维区域上进行了实验，验证了算法的有效性，并和(ref ma-quad,ref  paving,ref sdu-automesh)进行了比较，最后提出了把算法扩展到3维情形生成六面体网格的展望。
+\section{实验与比较}
+我们的实验在一台$3.4GHz CPU, 8GB RAM$的电脑上运行。\ref{sec:control-singular}节展示了不同参数下算法产生的多正N边形结构以及四边形网格不同的奇异结构。\ref{sec:comparison}节比较了本文的方法与(ref)的方法产生的四边形网格。
+\subsection{可控的奇异性} \label{sec:control-singular}
+输入不同的N以及高斯核宽度\mksize,我们的算法将2维网格变形为不同的多正N边形结构，并由此产生奇异性可控的四边形网格。由于奇异点的数目和四边形网格的质量往往是相互矛盾的，即：为了更好的逼近连续的边界，较高质量的四边形网格往往需要较多的奇异点，所以算法对奇异性的控制非常重要。
+
+\todo{图}展示了不同的N对tool模型变形得到的多正N边形结构以及用中轴线分割方法产生的四边形网格，高斯核宽度\ksize均为4。
+\subsection{高质量且奇异点较少的四边形网格}\label{sec:comparison}
+\section{总结与展望}

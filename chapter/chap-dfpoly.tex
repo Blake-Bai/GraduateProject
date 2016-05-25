@@ -1,17 +1,20 @@
 \chapter{多正多边形结构生成} \label{chap:polyquad}
-输入一个2维三角形网格$\mM$，本章的目标是把$\mM$变形为多正方形或多正八边形结构，并得到一个低形变的、三角形之间的一一映射。如果输入的是边界曲线，我们在边界上采点后使用CGAL库的共形Delaunay三角化。~\ref{sec:smooth_align}节通过优化网格边界外法向的光滑和对齐的能量驱动网格变形，得到近似的多正方形和多正八边形结构。~\ref{sec:labeling_flatten}节通过给边界打标记得到边界上正确的拓扑结构，并以此为目标进行变形，最后压平边界得到最终的多正方形和多正八边形结构以及它和输入网格之间的映射。\ref{sec:alg_optimize}节给出了总的变形算法和优化策略。对于边界法向稀疏的输入（比如整体上接近于矩形），把它变形为多正方形即可达到近似和简化的目的，但对于法向各异的边界，则需要变形为多正八边形，以保持基本的形态，避免过度地简化。
+输入一个2维三角形网格$\mM$，本章的目标是把$\mM$变形为多正N边形结构的网格，并得到一个低形变的无翻转映射。如果输入的是边界曲线，我们在边界上采点后使用CGAL库(ref CGAL)的Delaunay三角化得到三角网格。~\ref{sec:smooth_align}节通过优化网格边界外法向的光滑和对齐的能量驱动网格变形，得到近似的多正N边形结构。~\ref{sec:labeling_flatten}节通过给边界打标记得到边界上正确的拓扑结构，并以此为目标进行变形，最后压平边界得到严格的多正N边形结构，越大的N得到的结构越接近原始区域。\ref{sec:alg_optimize}节给出了总的变形算法和优化策略。
 
 \section{法向光滑和对齐的网格变形} \label{sec:smooth_align}
-指定一组目标法向，本节的目标是让输入网格边界的法向通过变形逐渐地与其最接近的目标法向对齐，并且使变形后的形状与输入尽可能地接近。我们采用法向对齐能量和刚性形变函数~\cite{Fu2015}驱动网格的变形(~\ref{sec:egyalign}节)，并在变形的每一次迭代之前计算一个全局的旋转(~\ref{sec:egy_amips})，使网格处在合适的坐标系中，尽量减小初始的法向对齐能量。我们用算法输入的核宽度$\mksize$ 控制结果的奇异性。经过变形，与输入最接近的多正多边形结构会大致成型。
+以多正N边形结构的法向为目标，本节的目标是让输入网格边界的法向通过变形逐渐地与其最接近的目标法向对齐，并且使变形后的形状与输入尽可能地接近。我们采用法向对齐能量和刚性形变能量~\cite{Fu2015}驱动网格的变形(~\ref{sec:egyalign}节)，并在变形的每一次迭代之前计算一个全局的旋转(~\ref{sec:egy_amips})，使网格处在合适的坐标系中，尽量减小初始的法向对齐能量。算法输入的核宽度$\mksize$可以控制结果的奇异性。经过变形，与输入最接近的多正N边形结构会大致成型。
 
 \subsection{法向对齐能量} \label{sec:egyalign}
-设输入的2维网格为$\mM$，包含的三角形集合为$\mtset = \{\mt_1,\ldots,\mt_l\}$，顶点集合为$\{\mv^0_1,\ldots,\mv^0_{m}\}$，它的边界集合是$\mathcal{B}$。$\mathcal{B}$包含$n$个三角形的边$\{\mb_1,\ldots,\mb_n\}$，它们的法向是$\{\mn_1,\ldots,\mn_n\}$。定义算子$\Ax(\cdot)$，它将任意二维向量映射到离它最近的目标方向上。对于多正方形结构，目标方向为$(\pm 1,0)^T$, $(0,\pm 1)^T$ ，对于多正八边形结构，目标方向在原来的基础上多了$(\pm \frac{\sqrt{2}}{2},\pm \frac{\sqrt{2}}{2})^T$四个。于是多正方形或多正八边形定义为： $\mn_i = \Ax (\mn_i), \forall \, i$，即所有的边界法向都为目标法向的三角网格。在三维情形下，若目标方向为空间中的六个轴向，则生成的四面体网格为多立方体结构(polyube)。因为$\Ax(\mn_i)$算子是作用在每条边上的局部算子，所以对于复杂的边界，直接对原法向作用此算子可能会在使边界被过度地分割，产生不必要的细节。因此我们先对法向做高斯平滑，再驱动网格变形。我们定义如下的\emph{法向对齐能量}。
+设输入的2维网格为$\mM$，包含的三角形集合为$\mtset = \{\mt_1,\ldots,\mt_l\}$，顶点集合为$\{\mv^0_1,\ldots,\mv^0_{m}\}$，N它的边界集合是$\mathcal{B}$。$\mathcal{B}$包含$n$个三角形的边$\{\mb_1,\ldots,\mb_n\}$，它们的法向是$\{\mn_1,\ldots,\mn_n\}$。
+显然，正N边形边界的法向为$(\cos \frac{2\pi i}{N},\sin \frac{2\pi}{N}))^{T},i=0,...,N-1$，以此为目标法向，
+并定义算子$\Ax(\cdot)$，它将任意的二维向量映射到离它最近的目标法向上。因此，多正N边形网格满足$\mn_i = \Ax (\mn_i), \forall \, i$。
+在三维情形下，若目标方向为空间中的六个轴向，则生成的四面体网格为多立方体结构(PolyCube)。因为$\Ax(\mn_i)$算子是作用在每条边上的局部算子，所以对于复杂的边界，直接对原法向作用此算子可能会在使边界被过度地分割，产生不必要的细节。因此我们先对法向做高斯平滑，再驱动网格变形。我们定义如下的\emph{法向对齐能量}:
 \begin{equation} \label{equ:align}
 E_{align} = \frac{1}{n}\sum_{i=1}^n ( \mb_i \cdot \Ax(G_\sigma(\mn_i))) \^2.
 \end{equation}
 其中$G_\sigma (\cdot)$为高斯函数：
 \begin{equation}
-G_\sigma (\mn_i) = \sum_{\mb_j \in \mK_i} length(\mb_j),\exp\left(-\dfrac{dist(\mc_{\mb_i},\mc_{\mb_j})}{2\sigma_s^2} \right) \cdot \mn_j.
+G_\sigma (\mn_i) = \sum_{\mb_j \in \mK_i} \| \mb_j \|\,\exp\left(-\dfrac{dist(\mc_{\mb_i},\mc_{\mb_j})}{2\sigma_s^2} \right) \cdot \mn_j.
 \end{equation}
 其中$\mc_{\mb_i}$是边$\mb_j$的中点，$dist(\mc_{\mb_i}-\mc_{\mb_j})$是从点$\mc_{\mb_i}$到$\mc_{\mb_j}$沿着边界的距离。设
 \begin{equation} \label{eqn:sigma}
@@ -20,30 +23,30 @@ G_\sigma (\mn_i) = \sum_{\mb_j \in \mK_i} length(\mb_j),\exp\left(-\dfrac{dist(\
 其中$\mksize$ 为算法输入的核宽度，$\mavgl$ 为三角网格边界的平均长度。因此输入不同的$\mksize$ ，从而调整高斯函数的标准差，就可以控制结果的奇异性。
 
 \subsection{刚性形变能量} \label{sec:egy_amips}
-为了让变形后的多正方形或多正八边形结构近似输入的网格形状，我们考虑映射的刚性形变，使用AMIPS能量惩罚大的形变，并且避免变形过程中三角形的退化甚至翻转。设$\mfmap:R2->R2$为一个分片线性函数，是输入网格到输出网格之间的映射，考虑任意三角形$\mt \in \mM, \mfmap_\mt (\mvar) = \mjaco_\mt \mvar + \mtrans_\mt$是作用在$\mt$上的仿射变换, 其中$\mjaco_\mt$是2 x 2仿射矩阵，也是$\mfmap_\mt$的雅可比矩阵，设$\sigma_{1},\sigma_{2}$为$\mjaco_\mt$的奇异值，
-则对于任意输入三角形$\triangle \mv^0_p\mv^0_q\mv^0_r$和对应的输出三角形$\triangle \mv_p\mv_q\mv_r$,我们有
+为了让变形后的多正N边形结构接近输入的网格形状，我们考虑映射的刚性形变，用~\cite{Fu2015}定义的刚性能量惩罚大的形变，并且避免变形过程中三角形的退化甚至翻转。设$f:\mR^{2}\rightarrow\mR^2$为一个分片线性函数，是输入网格到输出网格之间的映射，考虑任意三角形$\mt \in \mM, f_\mt (\mvar) = \mjaco_\mt \mvar + \mtrans_\mt$是作用在$\mt$上的仿射变换, 其中$\mjaco_\mt$是2 x 2仿射矩阵，也是$f_\mt$的雅可比矩阵，根据\ref{sec:quad-metric}节的知识，
+对于任意输入三角形$\triangle \mv^0_p\mv^0_q\mv^0_r$和对应的输出三角形$\triangle \mv_p\mv_q\mv_r$,我们有
 \begin{equation}
 \mjaco_\mt = \left[\mv_p-\mv_q , \mv_p-\mv_r \right] \cdot \left[\mv^0_p-\mv^0_q , \mv^0_p-\mv^0_r \right]^{-1}.
 \end{equation}
-定义共形形变：
+设$\sigma_{1},\sigma_{2}$为$\mjaco_\mt$的奇异值，则共性形变定义为：
 \begin{equation}
 \delta_{conf,\mt} = \frac{\sigma_{1}}{\sigma_{2}} + \frac{\sigma_{2}}{\sigma_{1}} = \frac{\trace(\mjaco_\mt \mjaco_\mt ^T)}{\det \mjaco_\mt} .
 \end{equation}
-定义面积形变：
+面积形变定义为：
 \begin{equation}
 \delta_{area,\mt} = \left(\det \mjaco_\mt + (\det \mjaco_\mt)^{-1} \right).
 \end{equation}
-最后定义\emph{AMIPS能量}：
+最后得到\emph{刚性形变能量}：
 \begin{equation} \label{equ:amips}
 E_{iso} = \sum_{i=1}^l \exp \left(\alpha \, \delta_{conf} + (1-\alpha) \, \delta_{vol} \right).
 \end{equation}
-由于奇异值$\sigma_{1},\sigma_{2}$表示，而雅可比矩阵的行列式$\det \mjaco$表示映射在面积上的缩放，故(两个能量最小等价于奇异值为1，行列式为1)。另一方面，若任意一个三角形发生退化（行列式约等于0）则上述AMIPS能量都会趋于正无穷。因此，AMIPS能量能很好地表示映射的刚性形变的程度，并有效地惩罚较大的形变。若输入的三角形网格是高质量的，则AMIPS能量能保证产生无退化和翻转的三角形网格。
+由于奇异值$\sigma_{1},\sigma_{2}$表示映射在两个主轴方向上长度的缩放，而雅可比矩阵的行列式$\det \mjaco$表示映射在面积上的缩放，故当$f_{\mt}$是一个共形变换时，两个形变均达到最小值1。另一方面，若任意一个三角形发生退化($det(\mjaco_\mt$)),则$E_{iso}$会趋于正无穷。因此，$E_{iso}$能很好地表示映射的刚性形变的程度，并有效地惩罚较大的形变。若输入的三角形网格是高质量的，则它能保证产生无退化和翻转的三角形网格。
 
 结合\ref{equ:align}和\ref{equ:amips}，我们得到网格变形的总能量：
 \begin{equation}\label{equ:deform}
 E_{deform}=E_{iso}+\lambda E_{align}
 \end{equation}
-其中$\lambda$为权衡两个能量的权重，它的选取将在\ref{subsection:alg_optimize}节说明。$E_{iso}$的变量为网格所有点的坐标。
+其中$\lambda$为权衡两个能量的权重，它的选取将在\ref{sec:def_alg}节说明。$E_{iso}$的变量为网格所有点的坐标。
 \subsection{降低法向对齐能量的预旋转} \label{sec:efyalignaxis}
 显然，如果网格的边界法向不沿着目标法向分布，法向对齐能量可能会很大。为了尽量减小法向对齐能量,我们希望先对网格进行全局地旋转，使得旋转后的网格边界的法向与它们的目标法向尽量接近。即：
 
@@ -74,21 +77,20 @@ E_{deform}=E_{iso}+\lambda E_{align}
 	$\forall i, \ms_i \in \mSeg, \forall j, \mb_(ij) \in \ms_i, \mn_i = \mlabel_i$
 \end{definition}
 显然，多正多边形结构拓扑上的充分必要条件是相邻的段不能有相反的标记。另外，为了达到边界简化的目的，避免在四边形网格生成时产生过多的奇异点，我们不希望产生太短的段。于是我们要求：
-
-(1)$\forall \ms_i \in \mSeg,l_i<\mksize.$
-
-
-(2)$\forall \ms_i \in \mSeg,\mlabel_i \cdot \mlabel_{i+1} \not=-1 $
-
+\begin{enumerate}
+	\item $\forall \ms_i \in \mSeg,l_i<\mksize.$\
+	\item $\forall \ms_i \in \mSeg,\mlabel_i \cdot \mlabel_{i+1} \not=-1 $
+\end{enumerate}
 
 \textbf{注}\,在不引起混淆的前提下，$\mSeg_{i-1},\mSeg_{i+1}$表示$\mSeg_i$的两个相邻的段，$\mc_i$所在的两个段为$\mSeg_{i-1},\mSeg_i.$
-为了使多正多边形结构网格满足上述条件，我们采用如下策略修改边界的目标法向：
 
-(1)对长度小于$\mksize$的段，用与它相邻的两个段通过泛洪填充(flood filling)的策略吞掉。即从段两端的边开始，依次向中间把边的目标法向修改为相邻段的标记，直到两条被修改的边相遇。
+为了使多正多边形结构网格满足上述条件，我们采用如下策略修改边界的目标法向(\todo{图})：
+\begin{enumerate}
+\item\,对长度小于$\mksize$的段，用与它相邻的两个段通过泛洪填充(flood filling)的策略吞掉。即从段两端的边开始，依次向中间把边的目标法向修改为相邻段的标记，直到两条被修改的边相遇。
 
-(2)对相邻且标记相反的段，从二者公共的拐点开始在较长的段上截取一部分，形成一个新的段，以打断相反的标记。若较长段的长度d大于$2\mksize$,则新段的长度取为$\mksize$，否则取为$\lfloor\frac{d}{2}\rfloor$。通过新段的两个拐点形成向量$\mathbf{v}$，从目标法向中选取不是原有的两个标记且与$\mathbf{v}$的法向最接近的作为该新段的标记。
-
-\textbf{注意}\,执行策略(1)时，我们每次从所有段中选取最短的段；另外，为了不与策略(2)冲突，若与待吞掉的段相邻的两个段标记相反，则不对此段做处理。对于目标法向为奇数的多正多边形结构，不存在相反的法向，故不需要执行策略(2)。
+\item\,对相邻且标记相反的段，从二者公共的拐点开始在较长的段上截取一部分，形成一个新的段，以打断相反的标记。若较长段的长度d大于$2\mksize$,则新段的长度取为$\mksize$，否则取为$\lfloor\frac{d}{2}\rfloor$。通过新段的两个拐点形成向量$\mathbf{v}$，从目标法向中选取不是原有的两个标记且与$\mathbf{v}$的法向最接近的作为该新段的标记。
+\end{enumerate}
+\textbf{注意}\,执行策略1时，我们每次从所有段中选取最短的段；另外，为了不与策略2冲突，若与待吞掉的段相邻的两个段标记相反，则不对此段做处理。对于目标法向为奇数的多正多边形结构，不存在相反的法向，故不需要执行策略2。
 
 所有的段都满足上述两个要求后，固定边界的目标法向，以(~\ref{equ:deform})为目标函数进行变形，其中(\ref{equ:align})改为：
 \begin{equation}\label{equ:label_align}
@@ -108,10 +110,10 @@ s.t.\,  &\mc_i=(x_i,y_i) = l_i \cap l_{i-1}\\
 \end{equation}
 其中$\mc_i$是段$\ms_i，\ms_{i-1}$的公共拐点，$l_i(\cdot)$是段$\ms_i$所在直线，其方向由标记$\mlabel_i$唯一确定，$j$遍历所有边界点。因此这个二次规划的变量为m条直线的截距、m个拐点的坐标。
 
-用拉格朗日乘子解得拐点坐标及段的位置后，我们直接更新当前拐点的坐标，并固定不是拐点的边界点的横坐标，带入其所在段的直线方程更新纵坐标即可。用拉格朗日乘子解得拐点坐标及段的位置后，我们直接更新当前拐点的坐标，并固定不是拐点的边界点的横坐标，带入其所在段的直线方程更新纵坐标即可。为了解决压平可能带来的三角形的退化甚至翻转，得到输入和输出之间在三角形上的一一映射，压平后我们再固定网格的拐点，利用(ref smooth and untangling)优化其他点的位置。
+用拉格朗日乘子解得拐点坐标及段的位置后，我们直接更新当前拐点的坐标，并固定不是拐点的边界点的横坐标，带入其所在段的直线方程更新纵坐标即可。用拉格朗日乘子解得拐点坐标及段的位置后，我们直接更新当前拐点的坐标，并固定不是拐点的边界点的横坐标，带入其所在段的直线方程更新纵坐标即可。为了解决压平可能带来的三角形的退化甚至翻转，得到输入和输出之间在三角形上的一一映射，压平后我们再固定网格的拐点，利用\ref{chap:sus2d}章的网格质量提升算法优化其他点的位置。
 
-\section{网格变形算法和优化}
-本节给出从输入的三角网格到输出多正多边形结构网格的完整算法，并给出优化这些能量的策略。
+\section{网格变形算法和优化}\label{sec:def_alg}
+本节给出从输入的三角网格到输出多正N边形结构网格的完整算法，并给出优化这些能量的策略，\todo{图给出了N取不同值时woody模型变形得到的结果}。
 
 极小化能量$E_{deform}$~\ref{equ:deform}之前，我们先极小化\ref{equ:rot}，求出全局的旋转矩阵，然后作用在以减小初始的$E_{deform}$.$E_{deform}$是高度非线性的网格点坐标的函数，我们使用线回溯搜索步长的梯度法进行优化，并借助HLBFGS库(ref hlbfgs)实现，优化停止的条件是能量收敛或达到最大迭代次数。
 %由于\ref{sec:egyalign}法向对齐能量中的$\Ax$算子依赖于网格边界的形状，
