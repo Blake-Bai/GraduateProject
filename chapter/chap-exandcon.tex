@@ -1,10 +1,107 @@
 \chapter{实验与结论} \label{chap:exandcon}
 我们在各种不同的2维区域上进行了实验，验证了算法的有效性，并和(ref ma-quad,ref  paving,ref sdu-automesh)进行了比较，最后提出了把算法扩展到3维情形生成六面体网格的展望。
 \section{实验与比较}
-我们的实验在一台$3.4GHz CPU, 8GB RAM$的电脑上运行。\ref{sec:control-singular}节展示了不同参数下算法产生的多正N边形结构以及四边形网格不同的奇异结构。\ref{sec:comparison}节比较了本文的方法与(ref)的方法产生的四边形网格。
+我们的实验在一台3.4GHz CPU, 8GB RAM的电脑上运行。\ref{sec:control-singular}节展示了不同参数下算法产生的多正N边形结构以及四边形网格不同的奇异结构。\ref{sec:comparison}节比较了本文的方法与(ref)的方法产生的四边形网格。
 \subsection{可控的奇异性} \label{sec:control-singular}
 输入不同的N以及高斯核宽度\mksize,我们的算法将2维网格变形为不同的多正N边形结构，并由此产生奇异性可控的四边形网格。由于奇异点的数目和四边形网格的质量往往是相互矛盾的，即：为了更好的逼近连续的边界，较高质量的四边形网格往往需要较多的奇异点，所以算法对奇异性的控制非常重要。
 
-\todo{图}展示了不同的N对tool模型变形得到的多正N边形结构以及用中轴线分割方法产生的四边形网格，高斯核宽度\ksize均为4。
+\todo{图}展示了不同的N对tool模型变形得到的多正N边形结构以及用中轴线分割方法产生的四边形网格，高斯核宽度$\mksize$均为4。tool模型的法向几乎是均匀分布的，故N越大，变形时的目标法向越多，对原始模型的逼近越好，产生的奇异点也越多。
+\begin{figure}[t]
+	\centerline
+	{
+		\begin{overpic}[width=0.99\columnwidth]{N246_tool}
+			\put(13,-3){\textbf{tool}}
+			\put(33,-3){\textbf{N=2}}
+			\put(58,-3){\textbf{N=4}}
+			\put(88,-3){\textbf{N=6}}
+		\end{overpic}
+	}
+	\vspace{4mm}
+	\caption{tool模型产生的不同的多正N边形结构以及对应的四边形网格}
+	\label{fig:N246}
+	\vspace{-3mm}
+\end{figure}
+
+\todo{图}展示了不同的高斯核宽度$\mksize$产生的结果，N取8。$\mksize$越大，变形过程中对网格边界的光滑程度越大，且网格标记时会吞掉越长的边，因此得到的多正八边形结构对原始模型的简化程度越大，奇异点也越少。 
+
+\begin{figure}[t]
+	\centerline
+	{
+		\begin{overpic}[width=0.99\columnwidth]{vark}
+			\put(13,-3){\textbf{guitar}}
+			\put(33,-3){\textbf{$\mksize=1$}}
+			\put(58,-3){\textbf{$\mksize=3$}}
+			\put(88,-3){\textbf{$\mksize=5$}}
+		\end{overpic}
+	}
+	\vspace{4mm}
+	\caption{不同的$\mksize$产生的guitar模型的多正八边形结构及其四边形网格}
+	\label{fig:N246}
+	\vspace{-3mm}
+\end{figure}
+
 \subsection{高质量且奇异点较少的四边形网格}\label{sec:comparison}
+我们把多正N边形辅助生成的四边形网格模型分别和直接采用中轴线分割的方法(ref)、前沿推进法(ref)以及法(ref)的结果做了比较。\todo{表}统计了四边形网格所有单元的缩放Jacobian最大值($J_{max}$)、最小值($J_{min}$)、平均值($J_{avg}$)，角度的标准差$\sigma_{angle}$以及奇异点的数量($\#Singularity$)。\todo{图}展示了的结果，颜色越浅表示缩放Jacobian值越接近理想值1。
+
+通过比较可以看出，我们的结果均能有效地产生较少的奇异点，同时产生质量
+\begin{table}[t]
+	\caption{几种方法生成四边形网格质量的比较}
+		\centering \scalebox{0.8}
+		{
+			\begin{tabular}{lrrll}
+				\toprule
+				模型  & \#顶点 / \#四边形 & $J_{min}/J_{avg}$ & $\sigma_{angle}$ & \#singularity \\
+				\midrule
+				cactus-PQ & 432/347 &	0.56/0.94 &	14.36 &	37\\
+				cactus-LQ & 402/323 & 	0.58/0.94 &	13.83 & 40\\
+				cactus-MA & 617/544	&   0.17/0.88 &	23.48&	9\\
+				cactus-Ours& 613/520&	0.40/0.96 &	11.26&	4\\
+				\midrule
+				dino-PQ &931/812&	0.38/0.95&	 13.56&	85\\
+				dino-LQ &1151/1024	&0.38/0.95	&12.8&	51\\
+				dino-MA&1377/1248&	0.31/0.92&	18.33	&16\\
+				dino-Ours&923/825&	0.32/0.96&	12.16&	11 \\
+				\midrule
+				lake-PQ&569/480&	0.31/0.89&	19.23&	84\\
+				lake-LQ& 1009/891	& 0.51/0.93& 14.73&159\\
+				lake-MA&995/877	&0.43/0.93&	16.35&	16\\
+				lake-Ours&655/562&	0.31/0.94&	14.6&	7\\
+				
+				\midrule
+				shark&&&&\\
+				\midrule
+				woody&&&&\\
+				\midrule
+				guitar-PQ&926/797&	0.34/0.95&	13.18&	84\\
+				
+				guitar-LQ&550/458&	0.48/0.93&14.87	&82\\
+				
+				guitar-MA&1053/920&	0.15/0.95&	13.09&	10\\
+				
+				guitar-Ours&845/756&	0.28/0.94&	16.17&	4\\
+				
+				
+				\bottomrule
+			\end{tabular} 
+		}
+		\label{table:comparedata}
+		\vspace{-1mm}
+		
+\end{table}	
+\begin{figure}[t]
+	\centerline
+	{
+		\begin{overpic}[width=0.99\columnwidth]{lake}
+			\put(13,-3){\textbf{paving}}
+			\put(33,-3){\textbf{looping}}
+			\put(58,-3){\textbf{medial axis}}
+			\put(88,-3){\textbf{Ours}}
+		\end{overpic}
+	}
+	\vspace{4mm}
+	\caption{各算法对lake模型得到的四边形网格}
+	\label{fig:lark}
+	\vspace{-3mm}
+\end{figure}
+	
 \section{总结与展望}
